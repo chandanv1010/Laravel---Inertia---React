@@ -1,0 +1,518 @@
+@import 'tailwindcss';
+
+@plugin 'tailwindcss-animate';
+
+@source '../views';
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
+    'Noto Color Emoji';
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.87 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.87 0 0);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.145 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.145 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.985 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(0.269 0 0);
+  --sidebar-ring: oklch(0.439 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-size: 14px;
+  }
+}
+
+/* Helper text under headings (make smaller) */
+.text-sm.text-muted-foreground {
+  font-size: 12px;
+}
+
+
+.CollapsibleContent {
+  overflow: hidden;
+}
+
+.CollapsibleContent[data-state="open"] {
+  animation: slideDown 300ms ease-out;
+}
+
+.CollapsibleContent[data-state="closed"] {
+  animation: slideUp 300ms ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    height: 0;
+  }
+
+  to {
+    height: var(--radix-collapsible-content-height);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    height: var(--radix-collapsible-content-height);
+  }
+
+  to {
+    height: 0;
+  }
+}
+
+.custom-breadcrumb li+li:before {
+  content: '/';
+  padding: 0 5px;
+  color: #000
+}
+
+.custom-breadcrumb li:last-child>* {
+  font-weight: 500;
+}
+
+.page-wrapper {
+  background: #f3f3f4;
+}
+
+.page-container {
+  padding: 20px;
+}
+
+.document-editor .ck-content {
+  min-height: 200px;
+  max-width: 100%;
+  background: #fff;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #ccced1 !important;
+  border-top: 0 !important;
+  border-radius: 8px !important;
+}
+
+/* CKEditor container border-radius */
+.cke {
+  border-radius: 8px !important;
+  overflow: hidden !important;
+}
+
+.cke_inner {
+  border-radius: 8px !important;
+}
+
+.cke_top {
+  border-radius: 8px 8px 0 0 !important;
+}
+
+.cke_bottom {
+  border-radius: 0 0 8px 8px !important;
+}
+
+.cke_contents {
+  border-radius: 0 0 8px 8px !important;
+}
+
+.base-url {
+  position: absolute;
+  height: 36px;
+  line-height: 34px;
+  display: inline-block;
+  padding: 0 10px;
+  left: 0;
+  top: 0;
+  font-size: 12px;
+  border: 1px solid #c4cdd5;
+  background: linear-gradient(to bottom, #fff, #f9fafb);
+}
+
+/* Post content styles - List styles */
+.prose ul,
+[class*="content"] ul,
+article ul,
+.post-content ul {
+  list-style-type: disc;
+  list-style-position: outside;
+  padding-left: 1.5rem;
+  margin: 1rem 0;
+}
+
+.prose ul li,
+[class*="content"] ul li,
+article ul li,
+.post-content ul li {
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+
+.prose ol,
+[class*="content"] ol,
+article ol,
+.post-content ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+  padding-left: 1.5rem;
+  margin: 1rem 0;
+}
+
+.prose ol li,
+[class*="content"] ol li,
+article ol li,
+.post-content ol li {
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+
+/* Post content styles - Image with figure and figcaption */
+.prose figure,
+[class*="content"] figure,
+article figure,
+.post-content figure {
+  margin: 1.5rem auto;
+  text-align: center;
+  max-width: 100%;
+}
+
+.prose figure img,
+[class*="content"] figure img,
+article figure img,
+.post-content figure img {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+
+.prose figcaption,
+[class*="content"] figcaption,
+article figcaption,
+.post-content figcaption {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  color: oklch(0.556 0 0);
+  text-align: center;
+  font-style: italic;
+}
+
+.dark .prose figcaption,
+.dark [class*="content"] figcaption,
+.dark article figcaption,
+.dark .post-content figcaption {
+  color: oklch(0.708 0 0);
+}
+
+/* Standalone images in post content - center them */
+.prose img:not(figure img),
+[class*="content"] img:not(figure img),
+article img:not(figure img),
+.post-content img:not(figure img) {
+  display: block;
+  margin: 1.5rem auto;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+
+/* Category Slider - Gradient Shadow Fade */
+.gradient-shadow {
+  position: relative;
+}
+
+.gradient-shadow::before,
+.gradient-shadow::after {
+  position: absolute;
+  content: "";
+  width: 200px;
+  height: 100%;
+  top: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.gradient-shadow::before {
+  left: 0;
+  background: linear-gradient(90deg, #ffffff, transparent);
+}
+
+.gradient-shadow::after {
+  right: 0;
+  background: linear-gradient(270deg, #ffffff, transparent);
+}
+
+/* Category Slider - Wave Section with convex bulge */
+/* Category Slider - Wave Section with convex bulge */
+/* Category Slider - Wave Section with convex bulge */
+.category-wave-section {
+  position: relative;
+  background: #ffffff;
+  /* Main background white */
+  padding-top: 100px;
+  /* Increased padding to accommodate deeper wave */
+  border-bottom-left-radius: 1rem;
+  /* 16px */
+  border-bottom-right-radius: 1rem;
+  /* 16px */
+  overflow: hidden;
+  /* Ensure border radius clips content */
+}
+
+/* Convex bulge curve extending from top */
+.category-wave-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 120px;
+  /* Increased height for deeper bulge */
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 120' preserveAspectRatio='none'%3E%3Cpath fill='%23e0fbff' d='M0,0 L1440,0 L1440,25 L850,25 Q720,115 590,25 L0,25 Z'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  z-index: 10;
+}
+
+/* Scroll icon positioned INSIDE the bulge */
+.scroll-icon-wrapper {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50px);
+  /* Push up further to match pagination */
+  z-index: 30;
+}
+
+@layer utilities {
+  .animate-scroll-down {
+    animation: scroll-down 2s infinite ease-in-out;
+  }
+
+  @keyframes scroll-down {
+
+    0%,
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    50% {
+      transform: translateY(6px);
+      opacity: 0.8;
+    }
+  }
+
+  /* Product Gallery - Navigation Arrows - Bottom Right Corner */
+  .product-main-swiper .swiper-button-next,
+  .product-main-swiper .swiper-button-prev {
+    width: 40px !important;
+    height: 40px !important;
+    background: #ffffff !important;
+    border-radius: 50% !important;
+    border: 1px solid #e5e7eb !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+    opacity: 1 !important;
+    transition: all 0.2s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    /* Force Positioning */
+    top: auto !important;
+    bottom: 20px !important;
+    margin-top: 0 !important;
+  }
+
+  /* Right Button Position (Next) */
+  .product-main-swiper .swiper-button-next {
+    right: 20px !important;
+    left: auto !important;
+  }
+
+  /* Left Button Position (Prev - next to Right btn) */
+  .product-main-swiper .swiper-button-prev {
+    right: 70px !important;
+    /* 20 + 40 + 10 gap */
+    left: auto !important;
+  }
+
+  .product-main-swiper .swiper-button-next:hover,
+  .product-main-swiper .swiper-button-prev:hover {
+    background: #f9fafb !important;
+    border-color: #d1d5db !important;
+    transform: scale(1.05);
+  }
+
+  /* Hide default SVG */
+  .product-main-swiper .swiper-button-next svg,
+  .product-main-swiper .swiper-button-prev svg {
+    display: none !important;
+  }
+
+  /* Long Arrow Icons */
+  .product-main-swiper .swiper-button-next::after {
+    content: '→' !important;
+    font-size: 24px !important;
+    font-weight: 300 !important;
+    color: #111827 !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+    line-height: 1 !important;
+    transform: translateY(-2px);
+    /* Fix vertical alignment */
+  }
+
+  .product-main-swiper .swiper-button-prev::after {
+    content: '←' !important;
+    font-size: 24px !important;
+    font-weight: 300 !important;
+    color: #111827 !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+    line-height: 1 !important;
+    transform: translateY(-2px);
+    /* Fix vertical alignment */
+  }
+
+  /* Disabled state */
+  .product-main-swiper .swiper-button-next.swiper-button-disabled,
+  .product-main-swiper .swiper-button-prev.swiper-button-disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    background: #f3f4f6 !important;
+  }
+
+  /* Scrollbar styling for thumbnails */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 2px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+}

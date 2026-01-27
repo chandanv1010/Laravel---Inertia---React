@@ -1,0 +1,35 @@
+<?php  
+namespace App\Services\Impl\V1\{{namespace}};
+use App\Services\Impl\V1\BaseService;
+use App\Services\Interfaces\{{namespace}}\{{module}}ServiceInterface;
+use App\Repositories\{{namespace}}\{{module}}Repo;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
+
+class {{module}}Service extends BaseService implements {{module}}ServiceInterface {
+
+    protected $repository;
+
+    protected $with = ['creators'];
+    protected $simpleFilter = ['publish'];
+    protected $searchFields = ['name', 'description'];
+
+
+    // protected $perpage = ;
+
+    public function __construct(
+        {{module}}Repo $repository
+    )
+    {
+        $this->repository = $repository;
+        parent::__construct($repository);
+    }
+
+    protected function prepareModelData(): static {
+        $fillable = $this->repository->getFillable();
+        $this->modelData = $this->request->only($fillable);
+        $this->modelData['user_id'] = Auth::id();
+        return $this;
+    }
+
+}

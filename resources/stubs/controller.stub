@@ -1,0 +1,92 @@
+<?php   
+namespace App\Http\Controllers\Backend\{{version}}\{{namespace}};
+use App\Http\Controllers\Backend\BaseController;
+use Inertia\Response;
+use Inertia\Inertia;
+use Illuminate\Http\RedirectResponse;
+use App\Http\Requests\{{namespace}}\{{module}}\StoreRequest;
+use App\Http\Requests\{{namespace}}\{{module}}\UpdateRequest;
+use App\Http\Requests\{{namespace}}\{{module}}\BulkDestroyRequest;
+use App\Http\Requests\{{namespace}}\{{module}}\BulkUpdateRequest;
+use App\Services\Interfaces\{{namespace}}\{{module}}ServiceInterface as {{module}}Service;
+use App\Enums\CommonEnum;
+use Illuminate\Support\Facades\Lang;
+use App\Http\Resources\{{namespace}}\{{module}}Resource;
+use Illuminate\Http\Request;
+use App\Services\Interfaces\User\UserServiceInterface as UserService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+
+class {{module}}Controller extends BaseController{
+
+    use AuthorizesRequests;
+
+    protected $service;
+    private $userService;
+
+    public function __construct(
+        {{module}}Service $service,
+        UserService $userService
+    )
+    {
+        $this->service = $service;
+        $this->userService = $userService;
+        parent::__construct($service);
+    }
+
+    public function index(Request $request): Response{
+        $this->authorize('modules', '{{snake_module}}:index');
+        $records = $this->service->paginate($request);
+        $users = $this->userService->setWith([])->paginate(new Request()->merge(['type' => 'all', 'sort' => 'name,asc']));
+        return Inertia::render('backend/{{snake_namespace}}/{{snake_module}}/index', [
+            'records' => $records,
+            'users' => $users,
+            'request' => $request->all()
+        ]);
+    }
+
+    public function create(): Response {
+        $this->authorize('modules', '{{snake_module}}:store');
+        return Inertia::render('backend/{{snake_namespace}}/{{snake_module}}/save');
+    }
+
+    public function edit($id): Response {
+        $this->authorize('modules', '{{snake_module}}:update');
+        $record = $this->service->show($id);
+        return Inertia::render('backend/{{snake_namespace}}/{{snake_module}}/save', [
+            'record' => $record,
+        ]);
+    }
+
+    public function store(StoreRequest $request): RedirectResponse{
+        $this->authorize('modules', '{{snake_module}}:store');
+        $response = $this->service->save($request);
+        return $this->handleAction($request, $response, redirectRoute: '{{snake_module}}.index');
+    }
+
+    public function update(UpdateRequest $request, $id): RedirectResponse {
+        $this->authorize('modules', '{{snake_module}}:update');
+        $response = $this->service->save($request, $id);
+        return $this->handleAction($request, $response, redirectRoute: '{{snake_module}}.index', editRoute: '{{snake_module}}.edit');
+    }
+
+    public function destroy($id){
+        $this->authorize('modules', '{{snake_module}}:delete');
+        $response = $this->service->destroy($id);
+        return to_route('{{snake_module}}.index');
+    }
+
+    public function bulkDestroy(BulkDestroyRequest $request){
+        $this->authorize('modules', '{{snake_module}}:bulkDestroy');
+        $response = $this->service->bulkDestroy($request);
+        return $response ? redirect()->back()->with('success', Lang::get('messages.delete_success'))
+                         : redirect()->back()->with('error', Lang::get('messages.delete_failed'));
+    }
+
+    public function bulkUpdate(BulkUpdateRequest $request){
+        $this->authorize('modules', '{{snake_module}}:bulkUpdate');
+        $response = $this->service->bulkUpdate($request);
+        return $response ? redirect()->back()->with('success', Lang::get('messages.save_success'))
+                         : redirect()->back()->with('error', Lang::get('messages.save_failed'));
+    }
+
+}
