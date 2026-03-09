@@ -46,43 +46,26 @@ class ProductCatalogueSeeder extends Seeder
         config(['app.language_id' => $language->id]);
 
         $categories = [
-            // Level 1 - Danh mục chính
-            ['name' => 'Điện Thoại & Máy Tính Bảng', 'parent_id' => null, 'description' => 'Điện thoại thông minh, máy tính bảng và phụ kiện'],
-            ['name' => 'Laptop & Máy Tính', 'parent_id' => null, 'description' => 'Laptop, máy tính để bàn và linh kiện'],
-            ['name' => 'Điện Tử & Gia Dụng', 'parent_id' => null, 'description' => 'Thiết bị điện tử và đồ gia dụng'],
-            ['name' => 'Thời Trang & Phụ Kiện', 'parent_id' => null, 'description' => 'Quần áo, giày dép và phụ kiện thời trang'],
-            ['name' => 'Thực Phẩm & Đồ Uống', 'parent_id' => null, 'description' => 'Thực phẩm tươi sống và đồ uống'],
-            ['name' => 'Sức Khỏe & Làm Đẹp', 'parent_id' => null, 'description' => 'Sản phẩm chăm sóc sức khỏe và làm đẹp'],
-            
-            // Level 2 - Điện Thoại & Máy Tính Bảng
-            ['name' => 'Điện Thoại Thông Minh', 'parent_id' => 1, 'description' => 'Smartphone các hãng'],
-            ['name' => 'Máy Tính Bảng', 'parent_id' => 1, 'description' => 'Tablet và iPad'],
-            ['name' => 'Phụ Kiện Điện Thoại', 'parent_id' => 1, 'description' => 'Ốp lưng, sạc, tai nghe'],
-            
-            // Level 2 - Laptop & Máy Tính
-            ['name' => 'Laptop', 'parent_id' => 2, 'description' => 'Laptop các hãng'],
-            ['name' => 'Máy Tính Để Bàn', 'parent_id' => 2, 'description' => 'PC và linh kiện'],
-            ['name' => 'Linh Kiện Máy Tính', 'parent_id' => 2, 'description' => 'RAM, ổ cứng, card đồ họa'],
-            
-            // Level 2 - Điện Tử & Gia Dụng
-            ['name' => 'Tivi & Màn Hình', 'parent_id' => 3, 'description' => 'Smart TV, màn hình máy tính'],
-            ['name' => 'Tủ Lạnh & Máy Lạnh', 'parent_id' => 3, 'description' => 'Thiết bị làm lạnh'],
-            ['name' => 'Máy Giặt & Sấy', 'parent_id' => 3, 'description' => 'Thiết bị giặt ủi'],
-            
-            // Level 2 - Thời Trang & Phụ Kiện
-            ['name' => 'Quần Áo Nam', 'parent_id' => 4, 'description' => 'Thời trang nam giới'],
-            ['name' => 'Quần Áo Nữ', 'parent_id' => 4, 'description' => 'Thời trang nữ giới'],
-            ['name' => 'Giày Dép', 'parent_id' => 4, 'description' => 'Giày dép nam nữ'],
-            
-            // Level 2 - Thực Phẩm & Đồ Uống
-            ['name' => 'Thực Phẩm Tươi Sống', 'parent_id' => 5, 'description' => 'Rau củ, thịt cá tươi'],
-            ['name' => 'Đồ Uống', 'parent_id' => 5, 'description' => 'Nước uống, đồ uống có gas'],
-            ['name' => 'Đồ Khô & Đóng Hộp', 'parent_id' => 5, 'description' => 'Thực phẩm đóng hộp, đồ khô'],
-            
-            // Level 2 - Sức Khỏe & Làm Đẹp
-            ['name' => 'Mỹ Phẩm', 'parent_id' => 6, 'description' => 'Kem dưỡng, son môi, phấn'],
-            ['name' => 'Chăm Sóc Da', 'parent_id' => 6, 'description' => 'Sản phẩm chăm sóc da mặt'],
-            ['name' => 'Thực Phẩm Chức Năng', 'parent_id' => 6, 'description' => 'Vitamin, thực phẩm bổ sung'],
+            // Level 1 - Danh mục cha chính
+            ['name' => 'Sản Phẩm', 'parent_id' => null, 'description' => 'Tất cả sản phẩm'],
+
+            // Level 2 - Các danh mục con thuộc "Sản Phẩm"
+            ['name' => 'Thời Trang Nữ', 'parent_id' => 1, 'description' => 'Thời trang dành cho nữ'],
+            ['name' => 'Mẹ & Bé', 'parent_id' => 1, 'description' => 'Sản phẩm cho mẹ và bé'],
+            ['name' => 'Nhà Cửa & Đời Sống', 'parent_id' => 1, 'description' => 'Đồ dùng gia đình và đời sống'],
+            ['name' => 'Sắc Đẹp', 'parent_id' => 1, 'description' => 'Mỹ phẩm và làm đẹp'],
+            ['name' => 'Sức Khỏe', 'parent_id' => 1, 'description' => 'Chăm sóc sức khỏe'],
+            ['name' => 'Giày Dép Nữ', 'parent_id' => 1, 'description' => 'Giày dép thời trang nữ'],
+            ['name' => 'Túi Ví Nữ', 'parent_id' => 1, 'description' => 'Túi xách và ví nữ'],
+            ['name' => 'Phụ Kiện & Trang Sức Nữ', 'parent_id' => 1, 'description' => 'Phụ kiện và trang sức thời trang nữ'],
+            ['name' => 'Bách Hóa Online', 'parent_id' => 1, 'description' => 'Siêu thị trực tuyến'],
+            ['name' => 'Nhà Sách Online', 'parent_id' => 1, 'description' => 'Sách và văn phòng phẩm'],
+            ['name' => 'Máy Ảnh & Máy Quay Phim', 'parent_id' => 1, 'description' => 'Thiết bị nhiếp ảnh và quay phim'],
+            ['name' => 'Đồng Hồ', 'parent_id' => 1, 'description' => 'Đồng hồ đeo tay'],
+            ['name' => 'Giày Dép Nam', 'parent_id' => 1, 'description' => 'Giày dép thời trang nam'],
+            ['name' => 'Thiết Bị Điện Gia Dụng', 'parent_id' => 1, 'description' => 'Máy móc điện tử gia đình'],
+            ['name' => 'Thể Thao & Du Lịch', 'parent_id' => 1, 'description' => 'Đồ thể thao và du lịch'],
+            ['name' => 'Ô Tô & Xe Máy & Xe Đạp', 'parent_id' => 1, 'description' => 'Phương tiện giao thông và phụ kiện'],
         ];
 
         $insertedIds = [];
@@ -90,7 +73,7 @@ class ProductCatalogueSeeder extends Seeder
 
         foreach ($categories as $index => $category) {
             $parentId = $category['parent_id'] ? ($parentMap[$category['parent_id']] ?? 0) : 0;
-            
+
             $productCatalogue = ProductCatalogue::create([
                 'parent_id' => $parentId,
                 'user_id' => $user->id,
@@ -103,7 +86,7 @@ class ProductCatalogueSeeder extends Seeder
             $parentMap[$index + 1] = $productCatalogue->id;
 
             $canonical = Str::slug($category['name']);
-            
+
             // Kiểm tra canonical đã tồn tại chưa
             $baseCanonical = $canonical;
             $counter = 1;
@@ -111,7 +94,7 @@ class ProductCatalogueSeeder extends Seeder
                 $canonical = $baseCanonical . '-' . $counter;
                 $counter++;
             }
-            
+
             DB::table('product_catalogue_language')->updateOrInsert(
                 [
                     'product_catalogue_id' => $productCatalogue->id,

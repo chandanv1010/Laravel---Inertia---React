@@ -8,6 +8,7 @@ interface BaseSeoScore {
     id: number,
     publish?: string
     robots?: string,
+    image?: string,
     gallery_style?: string,
     image_aspect_ratio?: string,
     image_object_fit?: string,
@@ -38,6 +39,7 @@ const usePageSetup = <T extends BaseSeoScore>({
         content: record?.current_language?.content,
         robots: record?.robots,
         publish: record?.publish,
+        image: record?.image,
         gallery_style: record?.gallery_style,
         image_aspect_ratio: record?.image_aspect_ratio,
         image_object_fit: record?.image_object_fit
@@ -51,6 +53,7 @@ const usePageSetup = <T extends BaseSeoScore>({
         record?.current_language?.content,
         record?.robots,
         record?.publish,
+        record?.image,
         record?.gallery_style,
         record?.image_aspect_ratio,
         record?.image_object_fit

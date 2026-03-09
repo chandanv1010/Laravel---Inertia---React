@@ -42,26 +42,26 @@ const META_DESCRIPTION_LIMIT = 300
 function Seo<T extends TSeoBase>({
     record,
     errors
-}: ISeoProps<T>){
+}: ISeoProps<T>) {
 
     const { app } = usePage<SharedData>().props
-    const { 
+    const {
         setMetaTitle,
         setMetaDescription,
-        setMetaKeyword, 
+        setMetaKeyword,
         setCanonical,
         metaDescription,
-        displayMetaTitle, 
+        displayMetaTitle,
         canonical,
         name
-     } = useFormContext()
+    } = useFormContext()
 
     const displayCanonical = useMemo(() => canonical || toSlug(name), [canonical, name])
     const metaTitleLength = useMemo(() => (displayMetaTitle || '').length, [displayMetaTitle])
     const metaDescriptionLength = useMemo(() => (metaDescription || '').length, [metaDescription])
     const metaTitleOver = useMemo(() => metaTitleLength > META_TITLE_LIMIT, [metaTitleLength])
     const metaDescriptionOver = useMemo(() => metaDescriptionLength > META_DESCRIPTION_LIMIT, [metaDescriptionLength])
-   
+
     return (
         <CustomCard
             isShowHeader={true}
@@ -87,9 +87,8 @@ function Seo<T extends TSeoBase>({
                         id="meta_title"
                         type="text"
                         name="meta_title"
-                        autoFocus
                         tabIndex={1}
-                        autoComplete=""
+                        autoComplete="off"
                         placeholder=""
                         defaultValue={record?.meta_title || record?.current_language?.meta_title}
                         onChange={(e) => setMetaTitle(e.target.value)}
@@ -97,7 +96,7 @@ function Seo<T extends TSeoBase>({
                 </div>
             </div>
 
-             <div className="grid grid-cols-1 gap-4 mb-[20px]">
+            <div className="grid grid-cols-1 gap-4 mb-[20px]">
                 <div className="col-span-1">
                     <div className="flex justify-between items-center">
                         <Label htmlFor="meta_keyword" className="mb-[10px]">Từ khóa SEO</Label>
@@ -106,9 +105,8 @@ function Seo<T extends TSeoBase>({
                         id="meta_keyword"
                         type="text"
                         name="meta_keyword"
-                        autoFocus
                         tabIndex={1}
-                        autoComplete=""
+                        autoComplete="off"
                         placeholder=""
                         defaultValue={record?.meta_keyword || record?.current_language?.meta_keyword}
                         onChange={(e) => setMetaKeyword(e.target.value)}
@@ -125,9 +123,8 @@ function Seo<T extends TSeoBase>({
                     <Textarea
                         id="meta_description"
                         name="meta_description"
-                        autoFocus
                         tabIndex={1}
-                        autoComplete=""
+                        autoComplete="off"
                         className="h-[160px]"
                         placeholder=""
                         defaultValue={record?.meta_description || record?.current_language?.meta_description}
@@ -145,11 +142,10 @@ function Seo<T extends TSeoBase>({
                         <span className="base-url">{app.url}</span>
                         <Input
                             id="canonical"
-                            type="canonical"
+                            type="text"
                             name="canonical"
-                            autoFocus
                             tabIndex={1}
-                            autoComplete=""
+                            autoComplete="off"
                             placeholder=""
                             defaultValue={displayCanonical}
                             className="pl-[150px]"

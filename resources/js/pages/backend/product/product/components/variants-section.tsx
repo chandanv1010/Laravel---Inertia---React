@@ -7,6 +7,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Edit, Image as ImageIcon, Trash2, Info } from "lucide-react"
 import { NumberInput } from "@/components/number-input"
+
+/**
+ * Chuẩn hóa URL ảnh - thêm / nếu là đường dẫn tương đối
+ */
+function normalizeImageUrl(url: string | undefined): string {
+    if (!url) return ''
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
+        return url
+    }
+    return '/' + url
+}
 import {
     Table,
     TableBody,
@@ -140,14 +151,14 @@ export function VariantsSection({
                             const variantName = attributeNames.map(name => variant.attributes[name]).join(' / ')
 
                             return (
-                                <TableRow 
+                                <TableRow
                                     key={variant.id || index}
                                     className="cursor-pointer hover:bg-slate-50"
                                     onMouseDown={(e) => {
                                         // Don't trigger if clicking on action buttons or inputs
                                         const target = e.target as HTMLElement
                                         if (
-                                            target.closest('button') || 
+                                            target.closest('button') ||
                                             target.closest('input') ||
                                             target.closest('textarea') ||
                                             window.getSelection()?.toString().length > 0
@@ -160,7 +171,7 @@ export function VariantsSection({
                                         // Don't trigger if clicking on action buttons, inputs, or if text is selected
                                         const target = e.target as HTMLElement
                                         if (
-                                            target.closest('button') || 
+                                            target.closest('button') ||
                                             target.closest('input') ||
                                             target.closest('textarea') ||
                                             window.getSelection()?.toString().length > 0
@@ -179,7 +190,11 @@ export function VariantsSection({
                                             }}
                                         >
                                             {variant.image ? (
-                                                <img src={variant.image} className="w-full h-full object-cover rounded" />
+                                                <img
+                                                    src={normalizeImageUrl(variant.image)}
+                                                    className="w-full h-full object-cover rounded"
+                                                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                                                />
                                             ) : (
                                                 <ImageIcon className="h-4 w-4 text-slate-400" />
                                             )}
@@ -187,7 +202,7 @@ export function VariantsSection({
                                     </TableCell>
                                     <TableCell>
                                         {variant.id && productId ? (
-                                            <Link 
+                                            <Link
                                                 href={`/backend/product/${productId}/variants/${variant.id}`}
                                                 className="cursor-pointer hover:underline text-blue-600 font-normal"
                                                 onClick={(e) => {
@@ -204,7 +219,7 @@ export function VariantsSection({
                                         )}
                                     </TableCell>
                                     <TableCell>
-                                        <div 
+                                        <div
                                             onClick={(e) => e.stopPropagation()}
                                             onMouseDown={(e) => e.stopPropagation()}
                                             onMouseMove={(e) => e.stopPropagation()}
@@ -224,10 +239,10 @@ export function VariantsSection({
                                             const totalStock = warehouseStocks.length > 0
                                                 ? warehouseStocks.reduce((sum, stock) => sum + (stock.stock_quantity || 0), 0)
                                                 : variant.stock_quantity || 0
-                                            
+
                                             const stocksWithQuantity = warehouseStocks.filter(ws => (ws.stock_quantity || 0) > 0)
                                             const hasDistribution = stocksWithQuantity.length > 0
-                                            
+
                                             // Nếu là batch tracking, chỉ hiển thị (read-only)
                                             if (managementType === 'batch') {
                                                 // Nếu đã phân bổ (có warehouse_stocks với stock > 0), hiển thị tooltip
@@ -264,7 +279,7 @@ export function VariantsSection({
                                                 }
                                                 return <span className="font-medium text-gray-700">{totalStock}</span>
                                             }
-                                            
+
                                             // Nếu không phải batch tracking, cho phép input
                                             // Nhưng nếu đã phân bổ, vẫn hiển thị tooltip khi hover
                                             if (hasDistribution) {
@@ -272,7 +287,7 @@ export function VariantsSection({
                                                     <TooltipProvider>
                                                         <Tooltip delayDuration={0}>
                                                             <TooltipTrigger asChild>
-                                                                <div 
+                                                                <div
                                                                     onClick={(e) => e.stopPropagation()}
                                                                     onMouseDown={(e) => e.stopPropagation()}
                                                                     onMouseMove={(e) => e.stopPropagation()}
@@ -308,9 +323,9 @@ export function VariantsSection({
                                                     </TooltipProvider>
                                                 )
                                             }
-                                            
+
                                             return (
-                                                <div 
+                                                <div
                                                     onClick={(e) => e.stopPropagation()}
                                                     onMouseDown={(e) => e.stopPropagation()}
                                                     onMouseMove={(e) => e.stopPropagation()}

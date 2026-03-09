@@ -1,4 +1,5 @@
-<?php  
+<?php
+
 namespace App\Services\Impl\V2\Product;
 
 use App\Services\Impl\V1\Cache\BaseCacheService;
@@ -8,6 +9,7 @@ use App\Services\Interfaces\Product\ProductVariantServiceInterface;
 use App\Repositories\Product\ProductBatchRepo;
 use App\Repositories\Product\ProductBatchWarehouseRepo;
 use App\Repositories\Product\ProductBatchStockLogRepo;
+use App\Repositories\Product\ProductVariantRepo;
 use App\Repositories\Warehouse\WarehouseRepo;
 use App\Services\Interfaces\Warehouse\WarehouseServiceInterface;
 use Illuminate\Http\Request;
@@ -16,7 +18,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
-class ProductBatchService extends BaseCacheService implements ProductBatchServiceInterface {
+class ProductBatchService extends BaseCacheService implements ProductBatchServiceInterface
+{
 
     // Cache strategy: 'default' phù hợp cho product_batches
     protected string $cacheStrategy = 'default';
@@ -26,6 +29,7 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
     protected $batchWarehouseRepo;
     protected $batchStockLogRepo;
     protected $warehouseRepo;
+    protected $variantRepo;
     protected $productService;
     protected $variantService;
     protected $warehouseService;
@@ -40,22 +44,24 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
         ProductBatchWarehouseRepo $batchWarehouseRepo,
         ProductBatchStockLogRepo $batchStockLogRepo,
         WarehouseRepo $warehouseRepo,
+        ProductVariantRepo $variantRepo,
         ProductServiceInterface $productService,
         ProductVariantServiceInterface $variantService,
         WarehouseServiceInterface $warehouseService
-    )
-    {
+    ) {
         $this->repository = $repository;
         $this->batchWarehouseRepo = $batchWarehouseRepo;
         $this->batchStockLogRepo = $batchStockLogRepo;
         $this->warehouseRepo = $warehouseRepo;
+        $this->variantRepo = $variantRepo;
         $this->productService = $productService;
         $this->variantService = $variantService;
         $this->warehouseService = $warehouseService;
         parent::__construct($repository);
     }
 
-    protected function prepareModelData(): static {
+    protected function prepareModelData(): static
+    {
         $fillable = $this->repository->getFillable();
         $this->modelData = $this->request->only($fillable);
         return $this;
@@ -68,7 +74,7 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
     {
         $totalStock = $batch->warehouseStocks->sum('stock_quantity');
         $firstWarehouse = $batch->warehouseStocks->firstWhere('stock_quantity', '>', 0);
-        
+
         $warehouseDistribution = $batch->warehouseStocks
             ->where('stock_quantity', '>', 0)
             ->map(function ($ws) {
@@ -79,7 +85,7 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
                 ];
             })
             ->values();
-        
+
         return [
             'id' => $batch->id,
             'code' => $batch->code,
@@ -100,7 +106,7 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
     public function getBatchesForProduct(int $productId): array
     {
         $batches = $this->repository->getBatchesForProduct($productId);
-        
+
         return $batches->map(function ($batch) {
             return $this->formatBatchData($batch);
         })->values()->toArray();
@@ -112,7 +118,7 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
     public function getBatchesForVariant(int $variantId): array
     {
         $batches = $this->repository->getBatchesForVariant($variantId);
-        
+
         return $batches->map(function ($batch) {
             return $this->formatBatchData($batch);
         })->values()->toArray();
@@ -131,7 +137,7 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
 
         $batch = DB::transaction(function () use ($productId) {
             $any = $this->repository->findAnyBatchForProduct($productId);
-            
+
             if ($any) {
                 $this->repository->unsetDefaultForProduct($productId);
                 $any->is_default = true;
@@ -168,10 +174,13 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
         }
 
         $batch = DB::transaction(function () use ($variantId) {
-            $variant = $this->variantService->findById($variantId);
-            
+            $variant = $this->variantRepo->findById($variantId, ['warehouseStocks']);
+            if (!$variant) {
+                throw new \Exception("Không tìm thấy phiên bản sản phẩm (ID: {$variantId})");
+            }
+
             $any = $this->repository->findAnyBatchForVariant($variantId);
-            
+
             if ($any) {
                 $this->repository->unsetDefaultForVariant($variantId);
                 $any->is_default = true;
@@ -187,11 +196,9 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
             $defaultWarehouseId = $this->warehouseRepo->getModel()
                 ->orderBy('id')
                 ->value('id');
-            
-            if (!$variant->relationLoaded('warehouseStocks')) {
-                $variant->load('warehouseStocks');
-            }
-            
+
+            // warehouseStocks already eager-loaded via variantRepo->findById()
+
             $initialStockQuantity = 0;
             if ($defaultWarehouseId) {
                 $warehouseStock = $variant->warehouseStocks
@@ -286,7 +293,10 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
      */
     public function storeBatchesForVariant(Request $request, int $variantId): bool
     {
-        $variant = $this->variantService->findById($variantId);
+        $variant = $this->variantRepo->findById($variantId);
+        if (!$variant) {
+            throw new \Exception("Không tìm thấy phiên bản sản phẩm (ID: {$variantId})");
+        }
         $items = $request->input('items', []);
 
         // Normalize codes - logic giống V1
@@ -351,7 +361,7 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
                     $this->repository->unsetDefaultForProduct($batch->product_id);
                 }
             }
-            
+
             $this->repository->update($batch->id, [
                 'manufactured_at' => $payload['manufactured_at'] ?? $batch->manufactured_at,
                 'expired_at' => $payload['expired_at'] ?? $batch->expired_at,
@@ -361,7 +371,7 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
             if (array_key_exists('stock_quantity', $payload) && isset($payload['warehouse_id'])) {
                 $warehouseId = (int) $payload['warehouse_id'];
                 $afterStock = (int) $payload['stock_quantity'];
-                
+
                 // Logic giống V1: firstOrNew rồi save
                 $batchWarehouseModel = $this->batchWarehouseRepo->getModel();
                 $batchWarehouse = $batchWarehouseModel->firstOrNew([
@@ -369,11 +379,11 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
                     'warehouse_id' => $warehouseId,
                 ]);
                 $beforeStock = (int) ($batchWarehouse->stock_quantity ?? 0);
-                
+
                 // Cập nhật số lượng
                 $batchWarehouse->stock_quantity = $afterStock;
                 $batchWarehouse->save();
-                
+
                 $delta = $afterStock - $beforeStock;
                 if ($delta !== 0) {
                     $this->batchStockLogRepo->create([
@@ -424,7 +434,7 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
         try {
             DB::transaction(function () use ($batch, $fromWarehouseId, $toWarehouseId, $quantity, $reason) {
                 $sourceBatch = $this->repository->lockForUpdate($batch->id);
-                
+
                 if (!$fromWarehouseId) {
                     $firstWarehouseStock = $this->batchWarehouseRepo->findFirstWithStock($batch->id);
                     if (!$firstWarehouseStock) {
@@ -432,13 +442,13 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
                     }
                     $fromWarehouseId = $firstWarehouseStock->warehouse_id;
                 }
-                
+
                 if ($fromWarehouseId == $toWarehouseId) {
                     throw new \Exception('Không thể chuyển đến cùng kho.');
                 }
 
                 $sourceBatchWarehouse = $this->batchWarehouseRepo->lockAndFind($batch->id, $fromWarehouseId);
-                
+
                 if (!$sourceBatchWarehouse || $sourceBatchWarehouse->stock_quantity < $quantity) {
                     throw new \Exception('Số lượng tồn kho không đủ để chuyển.');
                 }
@@ -507,17 +517,17 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
     public function getBatchDetail(int $batchId, Request $request): array
     {
         $batch = $this->repository->findById($batchId, ['warehouseStocks.warehouse', 'product.current_languages']);
-        
+
         // Logic giống V1: orderBy('name')->get(['id', 'name']) rồi map
         $warehouses = $this->warehouseRepo->getModel()
             ->orderBy('name')
             ->get(['id', 'name'])
-            ->map(fn ($w) => ['value' => (string) $w->id, 'label' => $w->name])
+            ->map(fn($w) => ['value' => (string) $w->id, 'label' => $w->name])
             ->values();
 
         $isVariantBatch = !is_null($batch->product_variant_id);
-        $defaultTransactionTypes = $isVariantBatch 
-            ? ['variant', 'transfer', 'import', 'export', 'return', 'adjust'] 
+        $defaultTransactionTypes = $isVariantBatch
+            ? ['variant', 'transfer', 'import', 'export', 'return', 'adjust']
             : ['product', 'transfer', 'import', 'export', 'return', 'adjust'];
 
         $transactionTypes = $request->input('transaction_types', []);
@@ -549,7 +559,7 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
 
         $variantName = null;
         if ($batch->product_variant_id) {
-            $variant = $this->variantService->findById($batch->product_variant_id);
+            $variant = $this->variantRepo->findById($batch->product_variant_id);
             $variantName = $variant?->name;
         }
 

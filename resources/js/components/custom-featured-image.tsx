@@ -26,6 +26,19 @@ interface ICustomFeaturedImageProps {
     data?: string
     onDataChange?: (value: string) => void
 }
+/**
+ * Chuẩn hóa URL ảnh:
+ * - DB lưu dạng `userfiles/...` (không có / đầu)
+ * - Cần thêm / để tránh browser ghép relative với URL hiện tại
+ */
+function normalizeImageUrl(url: string): string {
+    if (!url) return ''
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
+        return url
+    }
+    return '/' + url
+}
+
 function CustomFeaturedImage({
     name = 'image',
     value = '',
@@ -40,7 +53,8 @@ function CustomFeaturedImage({
     const isControlled = onDataChange !== undefined
 
     // If not controlled and no context, we can't function properly, but let's avoid crashing or default to empty
-    const currentImage = isControlled ? (data || '') : (formContext?.image || '')
+    const rawImage = isControlled ? (data || '') : (formContext?.image || '')
+    const currentImage = normalizeImageUrl(rawImage)
     const updateImage = isControlled ? onDataChange : (formContext?.setImage || (() => { }))
 
     const openFinder = async () => {
@@ -88,7 +102,7 @@ function CustomFeaturedImage({
             <Input type="hidden" name={name} value={currentImage} />
             {currentImage ? (
                 <div className="relative group">
-                    <img src={currentImage} alt="Featured" />
+                    <img src={currentImage} alt="Ảnh đại diện" />
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-[5px] flex items-center justify-center gap-2">
                         <Button
                             type="button"

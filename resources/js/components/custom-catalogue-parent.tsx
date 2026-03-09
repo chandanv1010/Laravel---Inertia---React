@@ -58,7 +58,7 @@ export default function CustomCatalogueParent({
             </div>
             <Combobox
                 options={options}
-                value={value !== undefined ? value : (parentId ? String(parentId) : '')}
+                value={value !== undefined ? value : (parentId !== undefined && parentId !== null ? String(parentId) : '')}
                 onValueChange={handleChange}
                 placeholder="Chọn Danh Mục Cha"
                 searchPlaceholder="Tìm kiếm danh mục..."

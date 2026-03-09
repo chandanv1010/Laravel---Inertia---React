@@ -4,12 +4,12 @@ import { Input } from "./ui/input"
 import InputError from "./input-error"
 import EditorPage from '@/components/editor';
 import { useFormContext } from "@/contexts/FormContext";
-import { memo, useCallback,  } from "react";
+import { memo, useCallback, } from "react";
 import React from "react";
 
 
 
-interface ICustomGeneralProps{
+interface ICustomGeneralProps {
     name?: string,
     errors?: Record<string, string>,
     description?: string,
@@ -45,7 +45,7 @@ const CustomGeneral = ({
 
     // useEffect(() => {
     //     console.log(name, description, content);
-        
+
     // }, [name, description, content])
 
     return (
@@ -56,14 +56,14 @@ const CustomGeneral = ({
         >
             <div className="grid grid-cols-1 gap-4 mb-[20px]">
                 <div className="col-span-1">
-                    <Label htmlFor="email" className="mb-[10px]">Tiêu đề</Label>
+                    <Label htmlFor="name" className="mb-[10px]">Tiêu đề</Label>
                     <Input
                         id="name"
                         type="text"
                         name="name"
                         autoFocus
                         tabIndex={1}
-                        autoComplete=""
+                        autoComplete="off"
                         placeholder=""
                         defaultValue={name}
                         onChange={handleNameChange}
@@ -75,8 +75,8 @@ const CustomGeneral = ({
             {isShowDescription && (
                 <div className="grid grid-cols-1 gap-4 mb-[20px]">
                     <div className="col-span-1">
-                        <Label htmlFor="description" className="mb-[10px]">Mô Tả</Label>
-                        <EditorPage 
+                        <Label className="mb-[10px]">Mô Tả</Label>
+                        <EditorPage
                             name="description"
                             value={description}
                             onChange={handleDescriptionChange}
@@ -88,8 +88,8 @@ const CustomGeneral = ({
             {isShowContent && (
                 <div className="grid grid-cols-1 gap-4">
                     <div className="col-span-1">
-                        <Label htmlFor="content" className="mb-[10px]">Nội dung</Label>
-                        <EditorPage 
+                        <Label className="mb-[10px]">Nội dung</Label>
+                        <EditorPage
                             name="content"
                             height={600}
                             value={content}
@@ -98,7 +98,7 @@ const CustomGeneral = ({
                     </div>
                 </div>
             )}
-            
+
         </CustomCard>
     )
 }

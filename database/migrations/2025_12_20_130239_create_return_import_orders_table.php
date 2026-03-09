@@ -13,10 +13,12 @@ return new class extends Migration
     {
         Schema::create('return_import_orders', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('supplier_id')->constrained('suppliers')->onDelete('cascade');
             $table->decimal('deduction', 15, 2)->default(0);
             $table->decimal('refund_amount', 15, 2)->default(0);
             $table->decimal('return_cost', 15, 2)->default(0);
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

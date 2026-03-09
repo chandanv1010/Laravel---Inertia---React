@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\Backend\V1;
 
 use App\Http\Controllers\Backend\BaseController;
@@ -22,8 +23,9 @@ class DashboardController extends BaseController
      */
     public function index(): Response
     {
-        $this->authorize('modules', 'dashboard:index');
-        
+        // $this->authorize('modules', 'dashboard:index');
+
+
         return Inertia::render('backend/dashboard');
     }
 }

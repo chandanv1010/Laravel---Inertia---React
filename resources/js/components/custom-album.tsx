@@ -1,14 +1,27 @@
 // import { useEffect } from "react"
 import React, { useCallback, useEffect, useRef } from "react";
 import CustomCard from "./custom-card"
-import {  CardHeader, CardTitle } from '@/components/ui/card';
+import { CardHeader, CardTitle } from '@/components/ui/card';
 import { useState } from "react";
 import { Button } from "./ui/button";
-import { Trash2, GripVertical } from "lucide-react";
+import { Trash2, GripVertical, ImageOff } from "lucide-react";
 import { loadCkfinder } from "@/lib/ckfinder-loader"
 import SortableWrapper from "./sortable/SortableWrapper";
 import { useSortable } from "@dnd-kit/sortable";
-import {CSS} from '@dnd-kit/utilities';
+import { CSS } from '@dnd-kit/utilities';
+
+/**
+ * Chuẩn hóa URL ảnh:
+ * - DB có thể lưu dạng `userfiles/...` (không có / đầu)
+ * - Cần thêm / để tránh browser ghép relative với URL hiện tại
+ */
+function normalizeImageUrl(url: string): string {
+    if (!url) return ''
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
+        return url
+    }
+    return '/' + url
+}
 
 
 interface ICustomAlbumProps {
@@ -35,14 +48,14 @@ type CKFinderFinder = {
 }
 
 type CKFinderConstructor = {
-    new (): CKFinderFinder
+    new(): CKFinderFinder
 }
 
 type WindowWithCKFinder = Window & {
     CKFinder?: CKFinderConstructor
 }
 
-const ImageItem =  React.memo(({
+const ImageItem = React.memo(({
     id,
     src,
     onRemove,
@@ -58,7 +71,12 @@ const ImageItem =  React.memo(({
         setNodeRef,
         transform,
         transition,
-    } = useSortable({id});
+    } = useSortable({ id });
+
+    const [imgLoaded, setImgLoaded] = useState(false)
+    const [imgError, setImgError] = useState(false)
+
+    const normalizedSrc = normalizeImageUrl(src)
 
     const style = {
         transform: CSS.Transform.toString(transform),
@@ -67,16 +85,36 @@ const ImageItem =  React.memo(({
 
     return (
         <div
-            ref={setNodeRef} style={style} 
+            ref={setNodeRef} style={style}
             className="relative group rounded-[5px] overflow-hidden border border-gray-200 hover:shadow-md transition cursor-pointer">
-            <img 
-                src={src} 
-                loading="lazy" 
-                className="object-cover w-full h-[150px] border-0 outline-none" 
-                style={{ display: 'block' }}
-            />
-            
-            <div 
+            {/* Skeleton shown while loading */}
+            {!imgLoaded && !imgError && (
+                <div className="w-full h-[150px] bg-gray-200 animate-pulse flex items-center justify-center">
+                    <svg className="w-10 h-10 fill-gray-300" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+                        <path d="M80 57.6l-4-18.7v-23.9c0-1.1-.9-2-2-2h-3.5l-1.1-5.4c-.3-1.1-1.4-1.8-2.4-1.6l-32.6 7h-27.4c-1.1 0-2 .9-2 2v4.3l-3.4.7c-1.1.2-1.8 1.3-1.5 2.4l5 23.4v20.2c0 1.1.9 2 2 2h2.7l.9 4.4c.2.9 1 1.6 2 1.6h.4l27.9-6h33c1.1 0 2-.9 2-2v-5.5l2.4-.5c1.1-.2 1.8-1.3 1.6-2.4z" />
+                    </svg>
+                </div>
+            )}
+            {/* Error state: show placeholder instead of broken img */}
+            {imgError && (
+                <div className="w-full h-[150px] bg-gray-100 flex flex-col items-center justify-center gap-1 text-gray-400">
+                    <ImageOff className="w-8 h-8" />
+                    <span className="text-[11px]">Không tải được ảnh</span>
+                </div>
+            )}
+            {/* Actual image - hidden until loaded, never shown if error */}
+            {!imgError && (
+                <img
+                    src={normalizedSrc}
+                    loading="lazy"
+                    className="object-cover w-full h-[150px] border-0 outline-none"
+                    style={{ display: imgLoaded ? 'block' : 'none' }}
+                    onLoad={() => setImgLoaded(true)}
+                    onError={() => { setImgLoaded(false); setImgError(true) }}
+                />
+            )}
+
+            <div
                 {...attributes}
                 {...listeners}
                 className="
@@ -97,10 +135,10 @@ const ImageItem =  React.memo(({
             >
                 <GripVertical className="w-4 h-4 text-gray-600 pointer-events-none" />
             </div>
-            
-            <Button 
+
+            <Button
                 type="button"
-                onClick={onRemove} 
+                onClick={onRemove}
                 variant="destructive"
                 className="absolute top-1 right-[50px] h-8 w-8 bg-red-500 text-white text-xs px-2 py-1 rounded-[2px] opacity-0 group-hover:opacity-100 transition hover:bg-amber-400 cursor-pointer"
             >
@@ -115,7 +153,7 @@ export default function CustomAlbum({
     onDataChange,
     hideHeader = false,
     columns = 5
-}: ICustomAlbumProps){
+}: ICustomAlbumProps) {
 
     const [images, setImages] = useState<TPhoto[]>([])
     const isFirstRender = useRef<boolean>(true)
@@ -133,10 +171,10 @@ export default function CustomAlbum({
         if (dataRef.current === dataKey) {
             return // No change
         }
-        
+
         dataRef.current = dataKey
-        
-        if(data && data.length > 0){
+
+        if (data && data.length > 0) {
             isInternalUpdate.current = false
             const currentUrls = images.map(img => img.url).sort().join(',')
             const newUrls = [...data].sort().join(',')
@@ -157,28 +195,28 @@ export default function CustomAlbum({
             await loadCkfinder()
             // @ts-ignore - CKFinder is a third-party library, allow any type
             const CKFinder = (window as any).CKFinder
-        if(CKFinder){
+            if (CKFinder) {
                 // @ts-ignore - CKFinder is a third-party library, allow any type
-            const finder = new CKFinder();
+                const finder = new CKFinder();
                 // @ts-ignore - CKFinder is a third-party library, allow any type
-                if(finder){
+                if (finder) {
                     // @ts-ignore - CKFinder is a third-party library, allow any type
                     finder.basePath = '/plugins/ckfinder_2/';
                     // @ts-ignore - CKFinder is a third-party library, allow any type
-            finder.resourceType = 'Images';
+                    finder.resourceType = 'Images';
                     // @ts-ignore - CKFinder is a third-party library, allow any type
-            finder.selectActionFunction = function( fileUrl: string, data: unknown, allFiles: TAllFile[]) {
-                isInternalUpdate.current = true
-                setImages(prev => [
-                    ...prev,
-                    ...allFiles.map(file => ({
-                        id: crypto.randomUUID(),
-                        url: file.url
-                    }))
-                ]);
-            }
+                    finder.selectActionFunction = function (fileUrl: string, data: unknown, allFiles: TAllFile[]) {
+                        isInternalUpdate.current = true
+                        setImages(prev => [
+                            ...prev,
+                            ...allFiles.map(file => ({
+                                id: crypto.randomUUID(),
+                                url: file.url
+                            }))
+                        ]);
+                    }
                     // @ts-ignore - CKFinder is a third-party library, allow any type
-            finder.popup();
+                    finder.popup();
                 }
             }
         } catch (error) {
@@ -188,11 +226,11 @@ export default function CustomAlbum({
 
     // Only call onDataChange when images change from user action (not prop update)
     useEffect(() => {
-        if(!data && isFirstRender.current){
+        if (!data && isFirstRender.current) {
             isFirstRender.current = false
             return
         }
-        
+
         // Only notify parent if change was from user action
         if (isInternalUpdate.current) {
             const imageUrls = images.map(image => image.url)
@@ -204,7 +242,7 @@ export default function CustomAlbum({
     useEffect(() => {
         loadCkfinder()
     }, [])
-    
+
 
     return (
         <CustomCard
@@ -229,8 +267,8 @@ export default function CustomAlbum({
             )}
             {images && images.length > 0 ? (
                 <div className={hideHeader ? "px-6" : ""}>
-                    <SortableWrapper 
-                        items={images} 
+                    <SortableWrapper
+                        items={images}
                         setItems={(newOrder) => {
                             isInternalUpdate.current = true
                             setImages(newOrder)
@@ -238,7 +276,7 @@ export default function CustomAlbum({
                         columns={columns}
                     >
                         {images.map((photo) => (
-                            <ImageItem 
+                            <ImageItem
                                 src={photo.url}
                                 key={photo.id}
                                 id={photo.id}
@@ -247,8 +285,8 @@ export default function CustomAlbum({
                         ))}
                     </SortableWrapper>
                 </div>
-                
-            ): (
+
+            ) : (
                 <div className="click-to-upload cursor-pointer flex flex-col items-center justify-center p-[15px] border-dashed border-1 rounded-[5px] m-[15px]" onClick={openFinder}>
                     <svg className="w-[80px] h-[80px] fill-[#d3dbe2] mb-[10px]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
                         <path d="M80 57.6l-4-18.7v-23.9c0-1.1-.9-2-2-2h-3.5l-1.1-5.4c-.3-1.1-1.4-1.8-2.4-1.6l-32.6 7h-27.4c-1.1 0-2 .9-2 2v4.3l-3.4.7c-1.1.2-1.8 1.3-1.5 2.4l5 23.4v20.2c0 1.1.9 2 2 2h2.7l.9 4.4c.2.9 1 1.6 2 1.6h.4l27.9-6h33c1.1 0 2-.9 2-2v-5.5l2.4-.5c1.1-.2 1.8-1.3 1.6-2.4zm-75-21.5l-3-14.1 3-.6v14.7zm62.4-28.1l1.1 5h-24.5l23.4-5zm-54.8 64l-.8-4h19.6l-18.8 4zm37.7-6h-43.3v-51h67v51h-23.7zm25.7-7.5v-9.9l2 9.4-2 .5zm-52-21.5c-2.8 0-5-2.2-5-5s2.2-5 5-5 5 2.2 5 5-2.2 5-5 5zm0-8c-1.7 0-3 1.3-3 3s1.3 3 3 3 3-1.3 3-3-1.3-3-3-3zm-13-10v43h59v-43h-59zm57 2v24.1l-12.8-12.8c-3-3-7.9-3-11 0l-13.3 13.2-.1-.1c-1.1-1.1-2.5-1.7-4.1-1.7-1.5 0-3 .6-4.1 1.7l-9.6 9.8v-34.2h55zm-55 39v-2l11.1-11.2c1.4-1.4 3.9-1.4 5.3 0l9.7 9.7c-5.2 1.3-9 2.4-9.4 2.5l-3.7 1h-13zm55 0h-34.2c7.1-2 23.2-5.9 33-5.9l1.2-.1v6zm-1.3-7.9c-7.2 0-17.4 2-25.3 3.9l-9.1-9.1 13.3-13.3c2.2-2.2 5.9-2.2 8.1 0l14.3 14.3v4.1l-1.3.1z">

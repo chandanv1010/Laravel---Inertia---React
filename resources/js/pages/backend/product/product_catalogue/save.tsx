@@ -130,7 +130,7 @@ export default function ProductCatalogueSave({ record, catalogues }: ProductCata
                                 ...(isEdit ? { _method: 'put' } : {}),
                                 album: [...images],
                                 // moveAlbum: true,
-                                parent_id: data.parentId, // Map back from context state which uses parentId to DB column parent_id
+
                                 save_and_redirect: buttonAction.current
                             })}
                         >
@@ -196,8 +196,6 @@ export default function ProductCatalogueSave({ record, catalogues }: ProductCata
                                                 <CustomCatalogueParent
                                                     name="parent_id"
                                                     data={availableCatalogues}
-                                                    value={(record?.parent_id || 0).toString()}
-
                                                 />
                                             </CustomCard>
 
@@ -211,6 +209,9 @@ export default function ProductCatalogueSave({ record, catalogues }: ProductCata
                                                 />
                                             </CustomCard>
 
+
+
+
                                             <CustomCard
                                                 isShowHeader={true}
                                                 title="Cấu hình chung"
@@ -218,7 +219,7 @@ export default function ProductCatalogueSave({ record, catalogues }: ProductCata
                                             >
                                                 <CustomSeoOptions
                                                     order={record?.order?.toString()}
-                                                    hidden={['type']}
+                                                    hidden={['type', 'image_config']}
                                                 />
                                             </CustomCard>
 

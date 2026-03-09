@@ -128,47 +128,51 @@ function CustomSeoOptions({
                 </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <Label htmlFor="image_aspect_ratio" className="mb-2 block">Tỉ lệ ảnh</Label>
-                    <Select
-                        name="image_aspect_ratio"
-                        value={imageAspectRatio}
-                        onValueChange={setImageAspectRatio}
-                    >
-                        <SelectTrigger className="w-full cursor-pointer" id="image_aspect_ratio">
-                            <SelectValue placeholder="Chọn tỉ lệ" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem className="cursor-pointer" value="16:9">16:9</SelectItem>
-                            <SelectItem className="cursor-pointer" value="4:3">4:3</SelectItem>
-                            <SelectItem className="cursor-pointer" value="1:1">1:1</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div>
-                    <Label htmlFor="gallery_style" className="mb-2 block">Kiểu Slide</Label>
-                    <Select
-                        name="gallery_style"
-                        value={galleryStyle}
-                        onValueChange={setGalleryStyle}
-                    >
-                        <SelectTrigger className="w-full cursor-pointer" id="gallery_style">
-                            <SelectValue placeholder="Chọn kiểu" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem className="cursor-pointer" value="vertical">Vertical</SelectItem>
-                            <SelectItem className="cursor-pointer" value="horizontal">Horizontal</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
+            {!hidden.includes('image_config') && (
+                <>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label htmlFor="image_aspect_ratio" className="mb-2 block">Tỉ lệ ảnh</Label>
+                            <Select
+                                name="image_aspect_ratio"
+                                value={imageAspectRatio}
+                                onValueChange={setImageAspectRatio}
+                            >
+                                <SelectTrigger className="w-full cursor-pointer" id="image_aspect_ratio">
+                                    <SelectValue placeholder="Chọn tỉ lệ" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem className="cursor-pointer" value="16:9">16:9</SelectItem>
+                                    <SelectItem className="cursor-pointer" value="4:3">4:3</SelectItem>
+                                    <SelectItem className="cursor-pointer" value="1:1">1:1</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label htmlFor="gallery_style" className="mb-2 block">Kiểu Slide</Label>
+                            <Select
+                                name="gallery_style"
+                                value={galleryStyle}
+                                onValueChange={setGalleryStyle}
+                            >
+                                <SelectTrigger className="w-full cursor-pointer" id="gallery_style">
+                                    <SelectValue placeholder="Chọn kiểu" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem className="cursor-pointer" value="vertical">Vertical</SelectItem>
+                                    <SelectItem className="cursor-pointer" value="horizontal">Horizontal</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
 
-            <ImageObjectFitSelector
-                value={imageObjectFit as 'cover' | 'scale-down' | 'auto' | 'contain'}
-                onChange={setImageObjectFit}
-                label="Kiểu hiển thị ảnh"
-            />
+                    <ImageObjectFitSelector
+                        value={imageObjectFit as 'cover' | 'scale-down' | 'auto' | 'contain'}
+                        onChange={setImageObjectFit}
+                        label="Kiểu hiển thị ảnh"
+                    />
+                </>
+            )}
         </div>
     )
 }

@@ -3,6 +3,7 @@ import Header from '@/components/frontend/header/index';
 import Footer from '@/components/frontend/footer';
 import { Head, usePage } from '@inertiajs/react';
 import { Toaster } from 'sonner';
+import { CartProvider } from '@/contexts/cart-context';
 
 interface SeoConfig {
     meta_title?: string;
@@ -32,45 +33,47 @@ export default function FrontendLayout({ children, seo, title }: FrontendLayoutP
     const robots = seo?.meta_robots || 'index, follow'; // Dynamic robots
 
     return (
-        <div className="min-h-screen flex flex-col bg-background font-sans antialiased text-foreground">
-            <Head>
-                <title>{siteTitle}</title>
+        <CartProvider>
+            <div className="min-h-screen flex flex-col bg-background font-sans antialiased text-foreground">
+                <Head>
+                    <title>{siteTitle}</title>
 
-                {/* Basic Meta */}
-                <meta name="description" content={description} />
-                {keywords && <meta name="keywords" content={keywords} />}
-                <meta name="robots" content={robots} />
-                <meta name="author" content={siteTitle} />
+                    {/* Basic Meta */}
+                    <meta name="description" content={description} />
+                    {keywords && <meta name="keywords" content={keywords} />}
+                    <meta name="robots" content={robots} />
+                    <meta name="author" content={siteTitle} />
 
-                {/* Canonical */}
-                {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+                    {/* Canonical */}
+                    {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
 
-                {/* Open Graph / Facebook */}
-                <meta property="og:type" content="website" />
-                <meta property="og:site_name" content={siteTitle} />
-                <meta property="og:title" content={siteTitle} />
-                <meta property="og:description" content={description} />
-                {image && <meta property="og:image" content={image} />}
-                {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
-                <meta property="og:locale" content="vi_VN" />
+                    {/* Open Graph / Facebook */}
+                    <meta property="og:type" content="website" />
+                    <meta property="og:site_name" content={siteTitle} />
+                    <meta property="og:title" content={siteTitle} />
+                    <meta property="og:description" content={description} />
+                    {image && <meta property="og:image" content={image} />}
+                    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+                    <meta property="og:locale" content="vi_VN" />
 
-                {/* Twitter Card */}
-                <meta name="twitter:card" content="summary_large_image" />
-                <meta name="twitter:title" content={siteTitle} />
-                <meta name="twitter:description" content={description} />
-                {image && <meta name="twitter:image" content={image} />}
+                    {/* Twitter Card */}
+                    <meta name="twitter:card" content="summary_large_image" />
+                    <meta name="twitter:title" content={siteTitle} />
+                    <meta name="twitter:description" content={description} />
+                    {image && <meta name="twitter:image" content={image} />}
 
-                {/* Schema.org / JSON-LD would go in a script tag if needed */}
-            </Head>
+                    {/* Schema.org / JSON-LD would go in a script tag if needed */}
+                </Head>
 
-            <Header />
+                <Header />
 
-            <main className="flex-1 w-full">
-                {children}
-            </main>
+                <main className="flex-1 w-full">
+                    {children}
+                </main>
 
-            <Footer />
-            <Toaster position="top-right" richColors />
-        </div>
+                <Footer />
+                <Toaster position="top-right" richColors />
+            </div>
+        </CartProvider>
     );
 }

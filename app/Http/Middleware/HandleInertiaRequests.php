@@ -15,7 +15,7 @@ use App\Models\MenuItem;
 class HandleInertiaRequests extends Middleware
 {
     protected $rootView = 'app';
-    
+
     protected $systemService;
     protected $productCatalogueService;
     protected $bannerService;
@@ -77,39 +77,39 @@ class HandleInertiaRequests extends Middleware
     protected function getMenusForFrontend(): array
     {
         $languageId = config('app.language_id', 1);
-        
+
         // Load tất cả menus và items trong 2 queries
         $menus = Menu::whereIn('code', ['main-menu', 'footer-menu'])
             ->where('publish', '2')
             ->get()
             ->keyBy('code');
-        
+
         if ($menus->isEmpty()) {
             return ['main' => [], 'footer' => []];
         }
-        
+
         $menuIds = $menus->pluck('id')->toArray();
-        
+
         // Load tất cả items một lần với languages
         $allItems = MenuItem::whereIn('menu_id', $menuIds)
             ->where('publish', '2')
             ->with('languages')
             ->orderBy('order')
             ->get();
-        
+
         // Group items theo menu_id
         $itemsByMenu = $allItems->groupBy('menu_id');
-        
+
         // Build trees
         $mainMenu = $menus->get('main-menu');
         $footerMenu = $menus->get('footer-menu');
-        
+
         return [
             'main' => $mainMenu ? $this->buildMenuTree($itemsByMenu->get($mainMenu->id, collect()), $languageId) : [],
             'footer' => $footerMenu ? $this->buildMenuTreeAsGroups($itemsByMenu->get($footerMenu->id, collect()), $languageId) : [],
         ];
     }
-    
+
     /**
      * Build menu tree từ flat items
      */
@@ -121,7 +121,7 @@ class HandleInertiaRequests extends Middleware
                 $lang = $item->languages->firstWhere('id', $languageId);
                 $name = $lang?->pivot?->name ?: $item->getOriginal('name');
                 $url = $lang?->pivot?->url ?: $item->getOriginal('url');
-                
+
                 return [
                     'id' => $item->id,
                     'name' => $name,
@@ -134,7 +134,7 @@ class HandleInertiaRequests extends Middleware
             ->values()
             ->toArray();
     }
-    
+
     /**
      * Build menu tree as groups (cho footer)
      */
@@ -145,7 +145,7 @@ class HandleInertiaRequests extends Middleware
             ->map(function ($item) use ($items, $languageId) {
                 $lang = $item->languages->firstWhere('id', $languageId);
                 $name = $lang?->pivot?->name ?: $item->getOriginal('name');
-                
+
                 return [
                     'id' => $item->id,
                     'name' => $name,
