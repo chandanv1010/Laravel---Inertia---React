@@ -87,24 +87,9 @@ export default function Home({ seo, widgets, banners }: HomeProps) {
             {/* Voucher Bar */}
             <VoucherBar voucher={widgets?.activeVoucher} />
 
-            {/* Daily Best Sells */}
             <DailyBestSells
                 title="Sản phẩm bán chạy trong ngày"
-                products={widgets?.topSelling?.items_data?.slice(0, 4).map((p: any, i: number) => {
-                    // Mock discount for testing on 2nd item (index 1) as requested
-                    if (i === 1) {
-                        return {
-                            ...p,
-                            sale_price: p.price * 0.8, // 20% off
-                            original_price: p.price,
-                            has_discount: true,
-                            discount_percent: 20,
-                            promotion_end_date: new Date(Date.now() + 86400000).toISOString(), // 1 day left
-                            created_at: new Date().toISOString() // Ensure "New" badge logic applies too if verified
-                        };
-                    }
-                    return p;
-                }) || []}
+                products={widgets?.topSelling?.items_data?.slice(0, 4) || []}
                 banner={banners?.daily_best_sells || null}
             />
 
