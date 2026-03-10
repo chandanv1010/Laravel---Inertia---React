@@ -203,7 +203,7 @@ function CategoryBlockSection({
         );
     };
 
-    if (block.children.length === 0) {
+    if (block.children.length === 0 && block.all_products.length === 0) {
         return null;
     }
 
@@ -217,32 +217,34 @@ function CategoryBlockSection({
                     </h2>
 
                     {/* Child Category Tabs */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                        {/* All Tab */}
-                        <button
-                            onClick={() => setActiveChildId('all')}
-                            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer ${activeChildId === 'all'
-                                ? 'bg-teal-600 text-white'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
-                        >
-                            Tất cả
-                        </button>
-
-                        {/* Child Category Tabs */}
-                        {block.children.map((child) => (
+                    {block.children.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {/* All Tab */}
                             <button
-                                key={child.id}
-                                onClick={() => setActiveChildId(child.id)}
-                                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer ${activeChildId === child.id
+                                onClick={() => setActiveChildId('all')}
+                                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer ${activeChildId === 'all'
                                     ? 'bg-teal-600 text-white'
                                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                     }`}
                             >
-                                {child.name}
+                                Tất cả
                             </button>
-                        ))}
-                    </div>
+
+                            {/* Child Category Tabs */}
+                            {block.children.map((child) => (
+                                <button
+                                    key={child.id}
+                                    onClick={() => setActiveChildId(child.id)}
+                                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer ${activeChildId === child.id
+                                        ? 'bg-teal-600 text-white'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                >
+                                    {child.name}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Products Grid */}

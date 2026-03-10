@@ -247,6 +247,7 @@ class ProductResource extends JsonResource
                         'has_tax' => $pricingData['has_tax'] ?? false,
                         'promotion_id' => $pricingData['promotion_id'] ?? null,
                         'promotion_name' => $pricingData['promotion_name'] ?? null,
+                        'promotion_type' => !empty($pricingData['applied_promotions']) ? $pricingData['applied_promotions'][0]['type'] : null,
                         // Existing fields
                         'stock_quantity' => $stockQuantity,
                         'image' => $variant->image,
