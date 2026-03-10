@@ -157,7 +157,6 @@ export default function WidgetSave({ widget, availableModels, selectedItems = []
             }
         }
         setSearchTerm('');
-        setOpen(false);
     };
 
     const handleRemoveItem = (itemId: number) => {

@@ -3,11 +3,11 @@ import { Link } from '@inertiajs/react';
 import { RenderElement } from '@/components/frontend/promotional-banners';
 import type { SlideElement } from '@/components/frontend/promotional-banners';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination, Autoplay, EffectFade } from 'swiper/modules';
+import { Navigation, Pagination, Autoplay } from 'swiper/modules';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
-import 'swiper/css/effect-fade';
 
 interface BannerSlide {
     id: number;
@@ -175,8 +175,7 @@ export default function ClientBanner({
             }}
         >
             <Swiper
-                modules={[Navigation, Pagination, Autoplay, EffectFade]}
-                effect="fade"
+                modules={[Navigation, Pagination, Autoplay]}
                 spaceBetween={0}
                 slidesPerView={1}
                 navigation={{
@@ -198,8 +197,12 @@ export default function ClientBanner({
                 ))}
 
                 {/* Custom Navigation Buttons */}
-                <div className="swiper-button-prev !w-12 !h-12 !bg-white/80 !text-gray-800 !rounded-full !shadow-md after:!text-sm hover:!bg-white transition-all !z-10" />
-                <div className="swiper-button-next !w-12 !h-12 !bg-white/80 !text-gray-800 !rounded-full !shadow-md after:!text-sm hover:!bg-white transition-all !z-10" />
+                <div className="swiper-button-prev !w-11 !h-11 !bg-white !text-gray-800 !rounded-full !shadow-lg after:!content-[''] hover:!bg-primary hover:!text-white transition-all !z-10 opacity-0 group-hover:opacity-100 duration-300 flex items-center justify-center -translate-x-4 group-hover:translate-x-0">
+                    <ChevronLeft className="w-5 h-5 ml-[-2px]" strokeWidth={1.5} />
+                </div>
+                <div className="swiper-button-next !w-11 !h-11 !bg-white !text-gray-800 !rounded-full !shadow-lg after:!content-[''] hover:!bg-primary hover:!text-white transition-all !z-10 opacity-0 group-hover:opacity-100 duration-300 flex items-center justify-center translate-x-4 group-hover:translate-x-0">
+                    <ChevronRight className="w-5 h-5 mr-[-2px]" strokeWidth={1.5} />
+                </div>
             </Swiper>
         </div>
     );
