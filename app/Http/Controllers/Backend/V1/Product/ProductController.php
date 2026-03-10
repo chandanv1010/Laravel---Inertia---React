@@ -1,5 +1,7 @@
-<?php   
+<?php
+
 namespace App\Http\Controllers\Backend\V1\Product;
+
 use App\Http\Controllers\Backend\BaseController;
 use Inertia\Response;
 use Inertia\Inertia;
@@ -23,7 +25,8 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use App\Http\Requests\Product\Product\UpdateWarehouseStocksRequest;
 
-class ProductController extends BaseController{
+class ProductController extends BaseController
+{
 
     use AuthorizesRequests;
 
@@ -43,8 +46,7 @@ class ProductController extends BaseController{
         LanguageService $languageService,
         TaxSettingService $taxSettingService,
         WarehouseService $warehouseService
-    )
-    {
+    ) {
         $this->service = $service;
         $this->userService = $userService;
         $this->productCatalogueService = $productCatalogueService;
@@ -61,16 +63,25 @@ class ProductController extends BaseController{
      * @param Request $request
      * @return Response|JsonResponse
      */
-    public function index(Request $request): Response|JsonResponse{
+    public function index(Request $request): Response|JsonResponse
+    {
         $this->authorize('modules', 'product:index');
-        
+
         $records = $this->service->paginate($request);
+
+        // Eager load promotions pricing data to avoid N+1 queries from variants
+        $productIds = collect($records->items())->pluck('id')->toArray();
+        if (!empty($productIds)) {
+            $pricingService = app(\App\Services\Impl\V1\Promotion\PromotionPricingService::class);
+            $pricingService->preloadForProducts($productIds);
+        }
+
         $users = $this->userService->setWith([])->paginate(new Request(['type' => 'all', 'sort' => 'name,asc']));
         $catalogues = $this->productCatalogueService->getNestedsetDropdown();
         $languages = $this->languageService->paginate(new Request(['type' => 'all', 'publish' => '2']));
-        
+
         $requestData = $this->service->formatRequestDataForFrontend($request);
-        
+
         if ($request->wantsJson()) {
             return response()->json([
                 'data' => ProductResource::collection($records)->resource->items(),
@@ -91,9 +102,10 @@ class ProductController extends BaseController{
      *
      * @return Response
      */
-    public function create(): Response {
+    public function create(): Response
+    {
         $this->authorize('modules', 'product:store');
-        
+
         $catalogues = $this->productCatalogueService->getNestedsetDropdown();
         $brands = $this->productBrandService->getDropdown();
         $warehouses = $this->warehouseService->getDropdown();
@@ -112,7 +124,8 @@ class ProductController extends BaseController{
      * @param int $id
      * @return Response
      */
-    public function edit($id): Response {
+    public function edit($id): Response
+    {
         $this->authorize('modules', 'product:update');
         $record = $this->service->show($id);
 
@@ -120,7 +133,7 @@ class ProductController extends BaseController{
         $brands = $this->productBrandService->getDropdown();
         $warehouses = $this->warehouseService->getDropdown();
         $tax = $this->taxSettingService->get();
-        
+
         $pendingIncomingStock = \App\Models\ImportOrderItem::query()
             ->where('product_id', $id)
             ->whereHas('importOrder', function ($query) {
@@ -139,7 +152,7 @@ class ProductController extends BaseController{
                     'warehouse_id' => $item->importOrder->warehouse_id ?? null,
                 ];
             });
-        
+
         return Inertia::render('backend/product/product/save', [
             'record' => new ProductResource($record),
             'catalogues' => $catalogues,
@@ -156,7 +169,8 @@ class ProductController extends BaseController{
      * @param StoreRequest $request
      * @return RedirectResponse
      */
-    public function store(StoreRequest $request): RedirectResponse{
+    public function store(StoreRequest $request): RedirectResponse
+    {
         $this->authorize('modules', 'product:store');
         $response = $this->service->save($request);
         return $this->handleAction($request, $response, redirectRoute: 'product.index');
@@ -169,17 +183,18 @@ class ProductController extends BaseController{
      * @param int $id
      * @return RedirectResponse
      */
-    public function update(UpdateRequest $request, $id): RedirectResponse {
+    public function update(UpdateRequest $request, $id): RedirectResponse
+    {
         $this->authorize('modules', 'product:update');
         $response = $this->service->save($request, $id);
-        
+
         $onlyOrder = $request->has('order') && !$request->hasAny(['name', 'description', 'content', 'canonical', 'meta_title', 'image', 'album', 'product_catalogue_id', 'product_catalogues', 'publish']);
         $onlyPublish = $request->has('publish') && !$request->hasAny(['name', 'description', 'content', 'canonical', 'meta_title', 'image', 'album', 'product_catalogue_id', 'product_catalogues', 'order']);
-        
-        if($onlyOrder || $onlyPublish){
+
+        if ($onlyOrder || $onlyPublish) {
             return redirect()->back()->with('success', Lang::get('messages.save_success'));
         }
-        
+
         return $this->handleAction($request, $response, redirectRoute: 'product.index', editRoute: 'product.edit');
     }
 
@@ -192,19 +207,19 @@ class ProductController extends BaseController{
     public function quickAdd(StoreRequest $request): \Illuminate\Http\JsonResponse
     {
         $this->authorize('modules', 'product:store');
-        
+
         try {
             $stockQuantity = $request->input('stock_quantity', 0);
             $warehouseId = $request->input('warehouse_id');
-            
+
             if ($stockQuantity > 0 && !$request->has('warehouse_stocks')) {
                 $warehouseService = app(\App\Services\Interfaces\Warehouse\WarehouseServiceInterface::class);
                 $warehouses = $warehouseService->getDropdown();
-                $firstWarehouseValue = !empty($warehouses) && isset($warehouses[0]) 
+                $firstWarehouseValue = !empty($warehouses) && isset($warehouses[0])
                     ? (is_array($warehouses[0]) ? ($warehouses[0]['value'] ?? null) : ($warehouses[0]->value ?? null))
                     : null;
                 $defaultWarehouseId = $warehouseId ?: $firstWarehouseValue;
-                
+
                 if ($defaultWarehouseId) {
                     $request->merge([
                         'warehouse_stocks' => [[
@@ -215,9 +230,9 @@ class ProductController extends BaseController{
                     ]);
                 }
             }
-            
+
             $response = $this->service->save($request);
-            
+
             if ($response && $response->id) {
                 $product = $this->service->show($response->id);
                 return response()->json([
@@ -225,7 +240,7 @@ class ProductController extends BaseController{
                     'data' => new \App\Http\Resources\Product\ProductResource($product)
                 ]);
             }
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create product'
@@ -251,7 +266,8 @@ class ProductController extends BaseController{
      * @param int $id
      * @return RedirectResponse
      */
-    public function destroy($id){
+    public function destroy($id)
+    {
         $this->authorize('modules', 'product:delete');
         $response = $this->service->destroy($id);
         return to_route('product.index');
@@ -263,11 +279,12 @@ class ProductController extends BaseController{
      * @param BulkDestroyRequest $request
      * @return RedirectResponse
      */
-    public function bulkDestroy(BulkDestroyRequest $request){
+    public function bulkDestroy(BulkDestroyRequest $request)
+    {
         $this->authorize('modules', 'product:bulkDestroy');
         $response = $this->service->bulkDestroy($request);
         return $response ? redirect()->back()->with('success', Lang::get('messages.delete_success'))
-                         : redirect()->back()->with('error', Lang::get('messages.delete_failed'));
+            : redirect()->back()->with('error', Lang::get('messages.delete_failed'));
     }
 
     /**
@@ -276,11 +293,12 @@ class ProductController extends BaseController{
      * @param BulkUpdateRequest $request
      * @return RedirectResponse
      */
-    public function bulkUpdate(BulkUpdateRequest $request){
+    public function bulkUpdate(BulkUpdateRequest $request)
+    {
         $this->authorize('modules', 'product:bulkUpdate');
         $response = $this->service->bulkUpdate($request);
         return $response ? redirect()->back()->with('success', Lang::get('messages.save_success'))
-                         : redirect()->back()->with('error', Lang::get('messages.save_failed'));
+            : redirect()->back()->with('error', Lang::get('messages.save_failed'));
     }
 
     /**
@@ -293,13 +311,13 @@ class ProductController extends BaseController{
     public function updateWarehouseStocks(UpdateWarehouseStocksRequest $request, $id): JsonResponse
     {
         $this->authorize('modules', 'product:update');
-        
+
         $result = $this->service->updateWarehouseStocks($request, $id);
-        
+
         if ($result) {
             return response()->json(['success' => true, 'message' => 'Warehouse stocks updated successfully']);
         }
-        
+
         return response()->json(['success' => false, 'message' => 'Failed to update warehouse stocks'], 500);
     }
 
@@ -313,7 +331,7 @@ class ProductController extends BaseController{
     public function transferWarehouseStock(Request $request, $id): JsonResponse
     {
         $this->authorize('modules', 'product:update');
-        
+
         $validated = $request->validate([
             'from_warehouse_id' => 'required|integer|exists:warehouses,id',
             'to_warehouse_id' => 'required|integer|exists:warehouses,id',
@@ -359,10 +377,10 @@ class ProductController extends BaseController{
     public function getStockHistory(Request $request, $id): JsonResponse
     {
         $this->authorize('modules', 'product:index');
-        
+
         try {
             $product = $this->service->show($id);
-            
+
             if (!$product) {
                 return response()->json(['success' => false, 'message' => 'Product not found'], 404);
             }
@@ -449,10 +467,10 @@ class ProductController extends BaseController{
     public function getStockInfo($id): JsonResponse
     {
         $this->authorize('modules', 'product:index');
-        
+
         try {
             $product = $this->service->show($id);
-            
+
             if (!$product) {
                 return response()->json(['success' => false, 'message' => 'Product not found'], 404);
             }
@@ -516,10 +534,10 @@ class ProductController extends BaseController{
     public function getVariantStockInfo($productId, $variantId): JsonResponse
     {
         $this->authorize('modules', 'product:index');
-        
+
         try {
             $variant = \App\Models\ProductVariant::find($variantId);
-            
+
             if (!$variant || $variant->product_id != $productId) {
                 return response()->json(['success' => false, 'message' => 'Variant not found'], 404);
             }
@@ -572,7 +590,4 @@ class ProductController extends BaseController{
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
-
-
 }
-

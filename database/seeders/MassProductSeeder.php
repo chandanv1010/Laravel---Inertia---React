@@ -259,7 +259,7 @@ class MassProductSeeder extends Seeder
             'variants' => $variants,
             'pricing_tiers' => $tiers,
             'tags' => $this->getTags($managementType, $hasVariants, $catId),
-            'publish' => 1,
+            'publish' => 2,
             'apply_tax' => ($idx % 4 === 0) ? 1 : 0,
             'save_and_redirect' => '',
         ];
