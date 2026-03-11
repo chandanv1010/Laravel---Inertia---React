@@ -30,6 +30,7 @@ interface WarehouseStockManagerProps {
     productId?: number
     isEdit?: boolean
     trackInventory?: boolean
+    trackInventorySaved?: boolean
     isVariant?: boolean // Flag to determine if this is for variant (use different API endpoint)
     isBatchTracking?: boolean
     onBatchRefresh?: () => void // Callback to refresh batch list after stock update
@@ -47,6 +48,7 @@ export function WarehouseStockManager({
     productId,
     isEdit = false,
     trackInventory = false,
+    trackInventorySaved,
     isVariant = false,
     isBatchTracking = false,
     onBatchRefresh,
@@ -66,7 +68,7 @@ export function WarehouseStockManager({
     const [savingStock, setSavingStock] = useState(false)
     const [showTrackInventoryWarning, setShowTrackInventoryWarning] = useState(false)
     const [warehouseBatchModal, setWarehouseBatchModal] = useState<{ open: boolean, warehouseId: string | number, warehouseName: string }>({ open: false, warehouseId: "", warehouseName: "" })
-    
+
     // Transfer modal states (for basic products)
     const [openTransfer, setOpenTransfer] = useState(false)
     const [transferFromWarehouseId, setTransferFromWarehouseId] = useState<string>("")
@@ -192,8 +194,8 @@ export function WarehouseStockManager({
     }
 
     const openAdjustModal = (index: number) => {
-        // Check if trackInventory is enabled
-        if (isEdit && editMode === "adjust" && !trackInventory) {
+        // Check if trackInventory is enabled and saved
+        if (isEdit && editMode === "adjust" && (!trackInventory || trackInventorySaved === false)) {
             // Show warning dialog
             setShowTrackInventoryWarning(true)
             return
@@ -208,7 +210,7 @@ export function WarehouseStockManager({
     }
 
     const openStockAdjustment = (index: number) => {
-        if (!trackInventory && editMode === "adjust" && isEdit) {
+        if ((!trackInventory || trackInventorySaved === false) && editMode === "adjust" && isEdit) {
             setShowTrackInventoryWarning(true)
             return
         }
@@ -443,7 +445,7 @@ export function WarehouseStockManager({
             if (response.ok) {
                 toast.success("Chuyển kho thành công")
                 setOpenTransfer(false)
-                
+
                 // Reload để cập nhật warehouse stocks
                 router.reload({
                     only: isVariant ? ['variant'] : ['record'],

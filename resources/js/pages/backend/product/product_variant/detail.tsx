@@ -229,35 +229,35 @@ export default function VariantDetail({ product, variant, warehouses = [], tax }
 
     // Form submit handler using router.post with _method: 'put'
     const handleSubmit = useCallback((e: React.FormEvent) => {
-                                e.preventDefault()
-                                setProcessing(true)
+        e.preventDefault()
+        setProcessing(true)
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const formData: Record<string, any> = {
             _method: 'put',
             product_id: product.id,
-                                    sku,
-                                    barcode,
-                                    retail_price: retailPrice,
-                                    wholesale_price: wholesalePrice,
-                                    cost_price: costPrice,
-                                    compare_price: comparePrice,
-                                    image: featuredImage,
-                                    album: images,
-                                    warehouse_stocks: warehouseStocks,
-                                    track_inventory: trackInventory ? 1 : 0,
-                                    allow_negative_stock: allowNegativeStock ? 1 : 0,
-                                    low_stock_alert: lowStockAlert,
-                                    management_type: managementType,
-                                    expired_warning_days: expiredWarningDays,
+            sku,
+            barcode,
+            retail_price: retailPrice,
+            wholesale_price: wholesalePrice,
+            cost_price: costPrice,
+            compare_price: comparePrice,
+            image: featuredImage,
+            album: images,
+            warehouse_stocks: warehouseStocks,
+            track_inventory: trackInventory ? 1 : 0,
+            allow_negative_stock: allowNegativeStock ? 1 : 0,
+            low_stock_alert: lowStockAlert,
+            management_type: managementType,
+            expired_warning_days: expiredWarningDays,
         }
 
         router.post(`/backend/product_variant/${variant.id}`, formData, {
             preserveScroll: true,
-                                    onFinish: () => setProcessing(false),
+            onFinish: () => setProcessing(false),
         })
-    }, [variant.id, product.id, sku, barcode, retailPrice, wholesalePrice, costPrice, comparePrice, 
-        featuredImage, images, warehouseStocks, trackInventory, allowNegativeStock, 
+    }, [variant.id, product.id, sku, barcode, retailPrice, wholesalePrice, costPrice, comparePrice,
+        featuredImage, images, warehouseStocks, trackInventory, allowNegativeStock,
         lowStockAlert, managementType, expiredWarningDays])
 
     return (
@@ -271,17 +271,51 @@ export default function VariantDetail({ product, variant, warehouses = [], tax }
             <div className="page-container">
                 <div className="max-w-[1280px] ml-auto mr-auto">
                     <form onSubmit={handleSubmit}>
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                {/* Left column - Sidebar */}
-                                <div className="space-y-6">
-                                    {/* Block 1: Product Information */}
-                                    <CustomCard isShowHeader={false}>
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Left column - Sidebar */}
+                            <div className="space-y-6">
+                                {/* Block 1: Product Information */}
+                                <CustomCard isShowHeader={false}>
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-16 h-16 flex-shrink-0 rounded border border-gray-200 overflow-hidden bg-gray-50">
+                                            {product.image ? (
+                                                <img
+                                                    src={product.image}
+                                                    alt={product.name || 'Product'}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                                    </svg>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-semibold text-sm mb-1 truncate">{product.name || 'N/A'}</h3>
+                                            <p className="text-xs text-muted-foreground mb-2">
+                                                {variantCount} phiên bản
+                                            </p>
+                                            <Link
+                                                href={`/backend/product/${product.id}/edit`}
+                                                className="text-xs text-blue-600 hover:underline"
+                                            >
+                                                Trở lại sản phẩm
+                                            </Link>
+                                        </div>
+                                    </div>
+                                </CustomCard>
+
+                                {/* Block 2: Variant Information */}
+                                <CustomCard isShowHeader={true} title="Phiên bản">
+                                    <div className="space-y-3">
                                         <div className="flex items-start gap-3">
                                             <div className="w-16 h-16 flex-shrink-0 rounded border border-gray-200 overflow-hidden bg-gray-50">
-                                                {product.image ? (
+                                                {variant.image ? (
                                                     <img
-                                                        src={product.image}
-                                                        alt={product.name || 'Product'}
+                                                        src={variant.image}
+                                                        alt={variantName}
                                                         className="w-full h-full object-cover"
                                                     />
                                                 ) : (
@@ -292,196 +326,161 @@ export default function VariantDetail({ product, variant, warehouses = [], tax }
                                                     </div>
                                                 )}
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="font-semibold text-sm mb-1 truncate">{product.name || 'N/A'}</h3>
-                                                <p className="text-xs text-muted-foreground mb-2">
-                                                    {variantCount} phiên bản
-                                                </p>
-                                                <Link
-                                                    href={`/backend/product/${product.id}/edit`}
-                                                    className="text-xs text-blue-600 hover:underline"
-                                                >
-                                                    Trở lại sản phẩm
-                                                </Link>
-                                            </div>
-                                        </div>
-                                    </CustomCard>
-
-                                    {/* Block 2: Variant Information */}
-                                    <CustomCard isShowHeader={true} title="Phiên bản">
-                                        <div className="space-y-3">
-                                            <div className="flex items-start gap-3">
-                                                <div className="w-16 h-16 flex-shrink-0 rounded border border-gray-200 overflow-hidden bg-gray-50">
-                                                    {variant.image ? (
-                                                        <img
-                                                            src={variant.image}
-                                                            alt={variantName}
-                                                            className="w-full h-full object-cover"
-                                                        />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                                                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                                            </svg>
+                                            <div className="flex-1 min-w-0 space-y-2">
+                                                <h4 className="font-semibold text-sm">{variantName}</h4>
+                                                <div className="text-xs text-muted-foreground">
+                                                    <div className="flex items-center gap-4">
+                                                        <div>
+                                                            <span>Tồn kho: </span>
+                                                            <span className="font-medium text-gray-900">{totalStock}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span>Có thể bán: </span>
+                                                            <span className="font-medium text-gray-900">{availableStock}</span>
+                                                        </div>
+                                                    </div>
+                                                    {managementType === 'batch' && (
+                                                        <div className="mt-1">
+                                                            <span>Quản lý: </span>
+                                                            <span className="font-medium text-gray-900">Lô - HSD</span>
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="flex-1 min-w-0 space-y-2">
-                                                    <h4 className="font-semibold text-sm">{variantName}</h4>
-                                                    <div className="text-xs text-muted-foreground">
-                                                        <div className="flex items-center gap-4">
-                                                            <div>
-                                                                <span>Tồn kho: </span>
-                                                                <span className="font-medium text-gray-900">{totalStock}</span>
-                                                            </div>
-                                                            <div>
-                                                                <span>Có thể bán: </span>
-                                                                <span className="font-medium text-gray-900">{availableStock}</span>
-                                                            </div>
-                                                        </div>
-                                                        {managementType === 'batch' && (
-                                                            <div className="mt-1">
-                                                                <span>Quản lý: </span>
-                                                                <span className="font-medium text-gray-900">Lô - HSD</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            {/* Variant Image Editor */}
-                                            <div className="border-t pt-3">
-                                                <CustomFeaturedImage
-                                                    data={featuredImage}
-                                                    onDataChange={setFeaturedImage}
-                                                />
                                             </div>
                                         </div>
-                                    </CustomCard>
-                                </div>
+                                        {/* Variant Image Editor */}
+                                        <div className="border-t pt-3">
+                                            <CustomFeaturedImage
+                                                data={featuredImage}
+                                                onDataChange={setFeaturedImage}
+                                            />
+                                        </div>
+                                    </div>
+                                </CustomCard>
+                            </div>
 
-                                {/* Right column - Main content */}
-                                <div className="lg:col-span-2 space-y-6">
-                                    {/* Album Images - First */}
-                                    <CustomAlbum
-                                        data={images}
-                                        onDataChange={setImages}
+                            {/* Right column - Main content */}
+                            <div className="lg:col-span-2 space-y-6">
+                                {/* Album Images - First */}
+                                <CustomAlbum
+                                    data={images}
+                                    onDataChange={setImages}
+                                />
+
+                                {/* Product Info */}
+                                <CustomCard isShowHeader={true} title="Thông tin cơ bản">
+                                    <ProductBasicInfo
+                                        sku={sku}
+                                        barcode={barcode}
+                                        errors={{}}
                                     />
+                                </CustomCard>
 
-                                    {/* Product Info */}
-                                    <CustomCard isShowHeader={true} title="Thông tin cơ bản">
-                                        <ProductBasicInfo
-                                            sku={sku}
-                                            barcode={barcode}
-                                            errors={{}}
-                                        />
-                                    </CustomCard>
-
-                                    {/* Pricing */}
-                                    <CustomCard isShowHeader={true} title="Thông tin giá">
-                                        <div className="space-y-4">
-                                            {/* Row 1: Giá bán (left) and Giá so sánh (right) */}
-                                            <div className="flex space-x-4">
-                                                <div className="w-1/2">
-                                                    <div className="flex items-center mb-2">
-                                                        <Label htmlFor="retail_price">Giá bán</Label>
-                                                    </div>
-                                                    <PriceInput
-                                                        id="retail_price"
-                                                        name="retail_price"
-                                                        value={retailPrice}
-                                                        onValueChange={(v) => setRetailPrice(v ?? 0)}
-                                                        placeholder="Nhập giá bán"
-                                                    />
-                                                </div>
-                                                <div className="w-1/2">
-                                                    <div className="flex items-center mb-2">
-                                                        <Label htmlFor="compare_price">Giá so sánh</Label>
-                                                        {renderTooltip("Giá so sánh để hiển thị giá gốc khi có khuyến mãi")}
-                                                    </div>
-                                                    <PriceInput
-                                                        id="compare_price"
-                                                        name="compare_price"
-                                                        value={comparePrice}
-                                                        onValueChange={(v) => setComparePrice(v ?? 0)}
-                                                        placeholder="Nhập giá so sánh sản phẩm"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Row 2: Giá vốn (left) */}
+                                {/* Pricing */}
+                                <CustomCard isShowHeader={true} title="Thông tin giá">
+                                    <div className="space-y-4">
+                                        {/* Row 1: Giá bán (left) and Giá so sánh (right) */}
+                                        <div className="flex space-x-4">
                                             <div className="w-1/2">
                                                 <div className="flex items-center mb-2">
-                                                    <Label htmlFor="cost_price">Giá vốn</Label>
-                                                    {renderTooltip("Giá nhập hàng")}
+                                                    <Label htmlFor="retail_price">Giá bán</Label>
                                                 </div>
                                                 <PriceInput
-                                                    id="cost_price"
-                                                    name="cost_price"
-                                                    value={costPrice}
-                                                    onValueChange={(v) => setCostPrice(v ?? 0)}
-                                                    placeholder="Nhập giá vốn"
+                                                    id="retail_price"
+                                                    name="retail_price"
+                                                    value={retailPrice}
+                                                    onValueChange={(v) => setRetailPrice(v ?? 0)}
+                                                    placeholder="Nhập giá bán"
                                                 />
                                             </div>
-
-                                            {/* Áp dụng thuế */}
-                                            <div className="border-t pt-4">
-                                                <div className="flex items-center space-x-2">
-                                                    <Checkbox
-                                                        id="apply_tax"
-                                                        checked={tax?.price_includes_tax || false}
-                                                        onCheckedChange={() => {
-                                                            // Tax is managed at product level, so this is just for display
-                                                        }}
-                                                        disabled
-                                                    />
-                                                    <Label htmlFor="apply_tax" className="font-normal cursor-pointer">
-                                                        Áp dụng thuế
-                                                    </Label>
+                                            <div className="w-1/2">
+                                                <div className="flex items-center mb-2">
+                                                    <Label htmlFor="compare_price">Giá so sánh</Label>
+                                                    {renderTooltip("Giá so sánh để hiển thị giá gốc khi có khuyến mãi")}
                                                 </div>
+                                                <PriceInput
+                                                    id="compare_price"
+                                                    name="compare_price"
+                                                    value={comparePrice}
+                                                    onValueChange={(v) => setComparePrice(v ?? 0)}
+                                                    placeholder="Nhập giá so sánh sản phẩm"
+                                                />
                                             </div>
                                         </div>
-                                    </CustomCard>
 
-                                    {/* Inventory - Always show, like product page */}
-                                    <CustomCard isShowHeader={true} title="Thông tin kho">
-                                        <InventoryInfo
-                                            trackInventory={trackInventory}
-                                            trackInventorySaved={product.track_inventory}
-                                            allowNegativeStock={allowNegativeStock}
-                                            onTrackInventoryChange={setTrackInventory}
-                                            onAllowNegativeStockChange={setAllowNegativeStock}
-                                            lowStockAlert={lowStockAlert}
-                                            onLowStockAlertChange={setLowStockAlert}
-                                            warehouses={warehouses}
-                                            warehouseStocks={warehouseStocks}
-                                            onWarehouseStocksChange={handleWarehouseStocksChange}
-                                            productId={variant.id}
-                                            isEdit={true}
-                                            managementType={managementType}
-                                            onManagementTypeChange={setManagementType}
-                                            isVariant={true}
-                                            productIdForBatches={variant.id}
-                                            expiredWarningDays={expiredWarningDays}
-                                            onExpiredWarningDaysChange={setExpiredWarningDays}
-                                        />
-                                    </CustomCard>
-                                </div>
+                                        {/* Row 2: Giá vốn (left) */}
+                                        <div className="w-1/2">
+                                            <div className="flex items-center mb-2">
+                                                <Label htmlFor="cost_price">Giá vốn</Label>
+                                                {renderTooltip("Giá nhập hàng")}
+                                            </div>
+                                            <PriceInput
+                                                id="cost_price"
+                                                name="cost_price"
+                                                value={costPrice}
+                                                onValueChange={(v) => setCostPrice(v ?? 0)}
+                                                placeholder="Nhập giá vốn"
+                                            />
+                                        </div>
+
+                                        {/* Áp dụng thuế */}
+                                        <div className="border-t pt-4">
+                                            <div className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id="apply_tax"
+                                                    checked={tax?.price_includes_tax || false}
+                                                    onCheckedChange={() => {
+                                                        // Tax is managed at product level, so this is just for display
+                                                    }}
+                                                    disabled
+                                                />
+                                                <Label htmlFor="apply_tax" className="font-normal cursor-pointer">
+                                                    Áp dụng thuế
+                                                </Label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CustomCard>
+
+                                <CustomCard isShowHeader={true} title="Thông tin kho">
+                                    <InventoryInfo
+                                        trackInventory={trackInventory}
+                                        trackInventorySaved={variant.track_inventory}
+                                        allowNegativeStock={allowNegativeStock}
+                                        onTrackInventoryChange={setTrackInventory}
+                                        onAllowNegativeStockChange={setAllowNegativeStock}
+                                        lowStockAlert={lowStockAlert}
+                                        onLowStockAlertChange={setLowStockAlert}
+                                        warehouses={warehouses}
+                                        warehouseStocks={warehouseStocks}
+                                        onWarehouseStocksChange={handleWarehouseStocksChange}
+                                        productId={variant.id}
+                                        isEdit={true}
+                                        managementType={managementType}
+                                        onManagementTypeChange={setManagementType}
+                                        isVariant={true}
+                                        productIdForBatches={variant.id}
+                                        expiredWarningDays={expiredWarningDays}
+                                        onExpiredWarningDaysChange={setExpiredWarningDays}
+                                    />
+                                </CustomCard>
                             </div>
+                        </div>
 
-                            <div className="mt-6 flex justify-end gap-2">
-                                <Link href={`/backend/product/${product.id}/edit`}>
-                                    <Button type="button" variant="outline">
-                                        Hủy
-                                    </Button>
-                                </Link>
-                                <Button type="submit" disabled={processing}>
-                                    {processing && <LoaderCircle className="h-4 w-4 animate-spin mr-2" />}
-                                    Lưu lại
+                        <div className="mt-6 flex justify-end gap-2">
+                            <Link href={`/backend/product/${product.id}/edit`}>
+                                <Button type="button" variant="outline">
+                                    Hủy
                                 </Button>
-                            </div>
+                            </Link>
+                            <Button type="submit" disabled={processing}>
+                                {processing && <LoaderCircle className="h-4 w-4 animate-spin mr-2" />}
+                                Lưu lại
+                            </Button>
+                        </div>
                     </form>
-                    </div>
                 </div>
-            </AppLayout>
+            </div>
+        </AppLayout>
     )
 }

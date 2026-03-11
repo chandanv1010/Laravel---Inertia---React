@@ -60,6 +60,7 @@ interface Batch {
 
 export function InventoryInfo({
     trackInventory = true,
+    trackInventorySaved,
     allowNegativeStock = false,
     onTrackInventoryChange,
     onAllowNegativeStockChange,
@@ -602,6 +603,7 @@ export function InventoryInfo({
                                 showAllWarehouses={true}
                                 isEdit={isEdit}
                                 trackInventory={trackInventory}
+                                trackInventorySaved={trackInventorySaved}
                                 onStockHistoryRefresh={onStockHistoryRefresh}
                             />
                         </div>
@@ -634,6 +636,7 @@ export function InventoryInfo({
                                     productId={productId}
                                     isEdit={isEdit}
                                     trackInventory={trackInventory}
+                                    trackInventorySaved={trackInventorySaved}
                                     isBatchTracking={isBatchTracking}
                                     isVariant={isVariant}
                                     onBatchRefresh={() => {
