@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import VariantSelectionDialog from './variant-selection-dialog';
 import { cn } from '@/lib/utils';
+import { useCart } from '@/contexts/cart-context';
 
 interface AddToCartButtonProps {
     productId: number;
     productName?: string;
+    productPrice?: number;
     hasVariants?: boolean;
     variants?: Array<{
         id: number;
@@ -25,6 +27,7 @@ interface AddToCartButtonProps {
 export default function AddToCartButton({
     productId,
     productName = 'Sản phẩm',
+    productPrice = 0,
     hasVariants = false,
     variants = [],
     className,
@@ -33,6 +36,7 @@ export default function AddToCartButton({
     size = 'sm'
 }: AddToCartButtonProps) {
     const { toast } = useToast();
+    const { addToCart: contextAddToCart } = useCart();
     const [isLoading, setIsLoading] = useState(false);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -46,22 +50,30 @@ export default function AddToCartButton({
         }
     };
 
-    const addToCart = (productId: number, variantId: number | null) => {
+    const addToCart = async (productId: number, variantId: number | null, quantity: number = 1) => {
         setIsLoading(true);
 
-        // Simulate API call - will be replaced with real logic later
-        setTimeout(() => {
-            setIsLoading(false);
+        try {
+            await contextAddToCart(productId, variantId, quantity);
+
             toast({
                 title: "Đã thêm vào giỏ hàng!",
                 description: `${productName} đã được thêm vào giỏ hàng của bạn.`,
             });
             setIsDialogOpen(false);
-        }, 500);
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Lỗi',
+                description: 'Đã có lỗi xảy ra khi thêm vào giỏ hàng.',
+            });
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleVariantSelect = (variantId: number) => {
-        addToCart(productId, variantId);
+    const handleVariantSelect = (variantId: number, quantity: number) => {
+        addToCart(productId, variantId, quantity);
     };
 
     return (
@@ -92,6 +104,7 @@ export default function AddToCartButton({
                     onClose={() => setIsDialogOpen(false)}
                     onSelect={handleVariantSelect}
                     productName={productName}
+                    productPrice={productPrice}
                     variants={variants}
                 />
             )}

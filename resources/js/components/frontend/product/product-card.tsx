@@ -197,6 +197,7 @@ export default function ProductCard({
                         <AddToCartButton
                             productId={product.id}
                             productName={product.name}
+                            productPrice={hasSale ? salePrice! : originalPrice}
                             hasVariants={product.has_variants || false}
                             variants={product.variants}
                             buttonText="Thêm vào giỏ hàng"

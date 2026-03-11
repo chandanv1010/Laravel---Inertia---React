@@ -183,6 +183,7 @@ export default function ProductDealOfTheWeek({
                     <AddToCartButton
                         productId={product.id}
                         productName={product.name}
+                        productPrice={displayPrice}
                         hasVariants={product.has_variants || false}
                         variants={product.variants}
                         buttonText="Thêm vào giỏ hàng"

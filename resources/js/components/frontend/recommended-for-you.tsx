@@ -191,6 +191,7 @@ function CategoryBlockSection({
                         <AddToCartButton
                             productId={product.id}
                             productName={product.name}
+                            productPrice={hasSale ? product.sale_price! : product.price}
                             hasVariants={product.has_variants || false}
                             variants={product.variants}
                             buttonText="Thêm vào giỏ hàng"

@@ -219,6 +219,7 @@ export default function ProductItemDailyBestSell({ product, className = '' }: Pr
                         <AddToCartButton
                             productId={product.id}
                             productName={product.name}
+                            productPrice={displayPrice}
                             hasVariants={product.has_variants || false}
                             variants={product.variants}
                             buttonText="Thêm vào giỏ hàng"

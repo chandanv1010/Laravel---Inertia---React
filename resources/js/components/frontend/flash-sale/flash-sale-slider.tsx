@@ -81,6 +81,7 @@ export default function FlashSaleSlider({
                     <AddToCartButton
                         productId={product.id}
                         productName={product.name}
+                        productPrice={product.sale_price ?? product.price}
                         hasVariants={product.has_variants || false}
                         variants={product.variants}
                         buttonText="Thêm"

@@ -61,6 +61,7 @@ export default function ProductItemPromotion({ product, className = '' }: Produc
                     <AddToCartButton
                         productId={product.id}
                         productName={product.name}
+                        productPrice={finalPrice}
                         hasVariants={product.has_variants || false}
                         variants={product.variants}
                         buttonText="Thêm"

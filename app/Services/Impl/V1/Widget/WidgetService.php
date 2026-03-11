@@ -563,15 +563,46 @@ class WidgetService implements WidgetServiceInterface
             $hasVariants = $product->variants->count() > 0;
             $variants = [];
 
+            // Initialize pricing data for variants
             if ($hasVariants) {
-                $variants = $product->variants->map(function ($variant) use ($variantStocks) {
+                $variants = $product->variants->map(function ($variant) use ($variantStocks, $product, $pricingService) {
                     $variantStock = $variantStocks[$variant->id]->total_stock ?? 0;
+
+                    // Manually set product relation to avoid N+1 in pricing computation
+                    $variant->setRelation('product', $product);
+
+                    // Calculate final price using the service
+                    $pricingData = $pricingService->calculateFinalPrice($variant, 1, false);
+
+                    // Get attributes (for variant display name / mapping) if loaded
+                    // Note: WidgetService typically doesn't eager load attributes for variants,
+                    // but we can try to get them if they exist or at least provide the SKU.
+                    $attributesMap = [];
+                    if ($variant->relationLoaded('attributes')) {
+                        foreach ($variant->attributes as $attribute) {
+                            $catalogueName = null;
+                            if (
+                                $attribute->relationLoaded('attribute_catalogue') &&
+                                $attribute->attribute_catalogue &&
+                                $attribute->attribute_catalogue->relationLoaded('current_languages') &&
+                                $attribute->attribute_catalogue->current_languages->isNotEmpty()
+                            ) {
+                                $catalogueName = $attribute->attribute_catalogue->current_languages->first()?->pivot?->name;
+                            }
+                            $key = $catalogueName ?: ('attr_' . $attribute->attribute_catalogue_id);
+                            $attributesMap[$key] = $attribute->value ?? '';
+                        }
+                    }
+
                     return [
                         'id' => $variant->id,
                         'name' => $variant->name ?? 'Phiên bản ' . $variant->id,
-                        'price' => $variant->price ?? 0,
+                        'sku' => $variant->sku ?? '',
+                        'price' => $pricingData['final_price'] ?? $variant->retail_price ?? 0,
+                        'original_price' => $pricingData['original_price'] ?? $variant->retail_price ?? 0,
                         'stock' => (int) $variantStock,
                         'image' => $variant->image ?? null,
+                        'attributes' => $attributesMap,
                     ];
                 })->toArray();
             }
