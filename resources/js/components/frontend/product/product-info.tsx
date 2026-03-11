@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from '@inertiajs/react';
 import { Star, Share2, Heart, ShieldCheck, RefreshCw, Truck, Loader2 } from 'lucide-react';
 import { useCart } from '@/contexts/cart-context';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 
 interface ProductInfoProps {
     product: any;
@@ -15,6 +15,7 @@ interface ProductInfoProps {
 
 export default function ProductInfo({ product, catalogue, selectedVariant, allOutOfStock, quantity, onQuantityChange }: ProductInfoProps) {
     const { addToCart } = useCart();
+    const { toast } = useToast();
     const [isAdding, setIsAdding] = useState(false);
 
     // Price formatting helper
@@ -44,9 +45,16 @@ export default function ProductInfo({ product, catalogue, selectedVariant, allOu
                 quantity
             );
             // Replace with proper Toast
-            toast.success('Thêm vào giỏ hàng thành công!');
+            toast({
+                title: "Đã thêm vào giỏ hàng!",
+                description: `${product.name} đã được thêm vào giỏ hàng của bạn.`,
+            });
         } catch (error) {
-            toast.error('Có lỗi xảy ra khi thêm vào giỏ hàng.');
+            toast({
+                title: "Lỗi",
+                description: "Có lỗi xảy ra khi thêm vào giỏ hàng.",
+                variant: "destructive",
+            });
         } finally {
             setIsAdding(false);
         }
