@@ -315,6 +315,7 @@ class PromotionPricingService
     /**
      * Xác định phương án giá tốt nhất giữa gộp khuyến mãi và khuyến mãi độc lập
      */
+    /* 
     private function determineBestPricing(float $originalPrice, Collection $combinable, Collection $nonCombinable): array
     {
         // PRIORITY 1: Check for same_price promotions FIRST
@@ -415,6 +416,102 @@ class PromotionPricingService
             'is_combined' => $useCombined && count($appliedPromotions) > 1,
             'has_discount' => $totalDiscount > 0,
         ];
+    }
+    */
+
+    /**
+     * [NEW] Xác định phương án giá tốt nhất (Version 2)
+     * Tối ưu hóa so sánh giữa khuyến mãi cộng dồn và khuyến mãi độc lập cho mức sản phẩm.
+     */
+    private function determineBestPricing(float $originalPrice, Collection $combinable, Collection $nonCombinable): array
+    {
+        // 1. Ưu tiên Same Price (Đồng giá)
+        $samePrice = $nonCombinable->first(fn($p) => $p['promotion']->discount_type === 'same_price');
+        if ($samePrice) {
+            return $this->buildPricingResult($originalPrice, $samePrice['discount_amount'], [$samePrice], false);
+        }
+
+        // 2. So sánh Gộp vs Độc lập
+        $combinedDiscount = min($combinable->sum('discount_amount'), $originalPrice);
+        $bestSingle = $nonCombinable->sortByDesc('discount_amount')->first();
+        $bestSingleDiscount = $bestSingle['discount_amount'] ?? 0;
+
+        if ($combinedDiscount >= $bestSingleDiscount && $combinedDiscount > 0) {
+            return $this->buildPricingResult($originalPrice, $combinedDiscount, $combinable->toArray(), count($combinable) > 1);
+        } elseif ($bestSingleDiscount > 0) {
+            return $this->buildPricingResult($originalPrice, $bestSingleDiscount, [$bestSingle], false);
+        }
+
+        return $this->emptyPriceResult($originalPrice);
+    }
+
+    /**
+     * Helper to build pricing result object
+     */
+    private function buildPricingResult(float $original, float $discount, array $promos, bool $isCombined): array
+    {
+        $final = max($original - $discount, 0);
+        $applied = array_map(function($p) {
+            $promo = isset($p['promotion']) ? $p['promotion'] : $p;
+            $pDiscount = isset($p['discount_amount']) ? $p['discount_amount'] : 0;
+            
+            return [
+                'id' => $promo->id,
+                'name' => $promo->name,
+                'discount' => $pDiscount,
+                'type' => $promo->discount_type,
+                'value' => $promo->discount_type === 'same_price' ? $promo->combo_price : $promo->discount_value,
+            ];
+        }, $promos);
+
+        return [
+            'original_price' => $original,
+            'final_price' => $final,
+            'discount_amount' => $discount,
+            'discount_percent' => $original > 0 ? (int)round(($discount / $original) * 100) : 0,
+            'applied_promotions' => $applied,
+            'is_combined' => $isCombined,
+            'has_discount' => $discount > 0,
+        ];
+    }
+
+    /**
+     * Lấy các chương trình khuyến mãi tự động áp dụng cho TỔNG đơn hàng
+     */
+    public function getActiveOrderPromotions(): Collection
+    {
+        return Promotion::where('publish', 2)
+            ->where('type', 'order_discount')
+            ->expiryStatus('active')
+            ->where(function ($q) {
+                $q->where('start_date', '<=', now())
+                    ->orWhereNull('start_date');
+            })
+            ->orderBy('order', 'asc')
+            ->get();
+    }
+
+    /**
+     * Tính toán giá trị giảm giá cho một khuyến mãi đơn hàng cụ thể
+     */
+    public function calculateOrderPromotionDiscount(float $subtotal, Promotion $promotion): float
+    {
+        // Kiểm tra điều kiện đơn hàng tối thiểu
+        if ($promotion->condition_type === 'min_order_amount' && $subtotal < $promotion->condition_value) {
+            return 0;
+        }
+
+        $discount = 0;
+        if ($promotion->discount_type === 'percentage') {
+            $discount = $subtotal * ($promotion->discount_value / 100);
+            if ($promotion->max_discount_value > 0) {
+                $discount = min($discount, $promotion->max_discount_value);
+            }
+        } elseif ($promotion->discount_type === 'fixed_amount') {
+            $discount = $promotion->discount_value;
+        }
+
+        return min(max($discount, 0), $subtotal);
     }
 
     /**

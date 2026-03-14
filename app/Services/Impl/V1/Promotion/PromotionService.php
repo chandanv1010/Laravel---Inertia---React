@@ -130,9 +130,9 @@ class PromotionService extends BaseCacheService implements PromotionServiceInter
             $this->modelData['combine_with_order_discount'] = false;
             $this->modelData['combine_with_product_discount'] = false;
             $this->modelData['combine_with_free_shipping'] = false;
-        } else {
-            // Explicitly handle combine_with_* boolean fields for non-combo types
-            // (fix for false values not being sent in form data)
+        } elseif ($this->request->has('name')) {
+            // CHỈ xử lý checkbox khi có 'name' (ngầm hiểu là đang ở form Edit/Create đầy đủ)
+            // Fix cho việc checkbox không gửi giá trị khi unchecked
             $this->modelData['combine_with_order_discount'] = $this->request->input('combine_with_order_discount', false);
             $this->modelData['combine_with_product_discount'] = $this->request->input('combine_with_product_discount', false);
             $this->modelData['combine_with_free_shipping'] = $this->request->input('combine_with_free_shipping', false);

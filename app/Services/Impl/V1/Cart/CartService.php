@@ -23,82 +23,6 @@ class CartService implements CartServiceInterface
         $this->productService = $productService;
     }
 
-    public function get(): array
-    {
-        $cart = Session::get($this->sessionKey, [
-            'items' => [],
-            'total_quantity' => 0,
-            'total_price' => 0
-        ]);
-
-        // Self-Healing Logic: Fix missing names/options in existing sessions
-        $hasUpdates = false;
-        foreach ($cart['items'] as &$item) {
-            // Check if needs update: Name missing/generic OR (Variant exists but Options missing)
-            $needsUpdate = empty($item['name']) || $item['name'] === 'Sản phẩm không tên' || 
-                           ($item['name'] === ' - ') ||
-                           (!empty($item['variant_id']) && empty($item['options']));
-
-            if ($needsUpdate) {
-                try {
-                    $product = $this->productService->show((int)$item['product_id']);
-                    if ($product) {
-                        // 1. Fix Name
-                        $translatedName = $product->current_languages->first()?->pivot?->name ?? $product->name;
-                        $cartName = $translatedName ?: 'Sản phẩm không tên';
-
-                        // 2. Fix Image (Fallback)
-                        $cartImage = $product->image ?: ($product->album[0] ?? null);
-
-                        // 3. Fix Variant Info
-                        $variant = null;
-                        if (!empty($item['variant_id'])) {
-                            $variant = $product->variants->where('id', $item['variant_id'])->first();
-                            if ($variant) {
-                                $variantName = $variant->name ?: '';
-                                if (!empty($variantName)) {
-                                    $cartName .= ' - ' . $variantName;
-                                }
-                                $cartImage = $variant->image ?: $cartImage;
-
-                                // Re-populate Options
-                                $options = [];
-                                if ($variant->relationLoaded('attributes')) {
-                                    foreach ($variant->attributes as $attribute) {
-                                        try {
-                                            $catName = null;
-                                            if ($attribute->relationLoaded('attribute_catalogue')) {
-                                                $cat = $attribute->attribute_catalogue;
-                                                $catName = $cat->current_languages->first()?->pivot?->name ?? $cat->name; 
-                                            }
-                                            $key = $catName ?: 'Option';
-                                            $valName = $attribute->current_languages->first()?->pivot?->name ?? $attribute->name;
-                                            $options[$key] = $valName;
-                                        } catch (\Exception $e) {}
-                                    }
-                                }
-                                $item['options'] = $options;
-                            }
-                        }
-
-                        $item['name'] = $cartName;
-                        $item['image'] = $cartImage; // Update image just in case
-                        
-                        $hasUpdates = true;
-                    }
-                } catch (\Exception $e) {
-                    // Log error or ignore to prevent breaking the cart completely
-                }
-            }
-        }
-
-        if ($hasUpdates) {
-            $this->save($cart);
-        }
-
-        return $cart;
-    }
-
     public function add(int $productId, ?int $variantId = null, int $quantity = 1): array
     {
         $cart = $this->get();
@@ -253,18 +177,64 @@ class CartService implements CartServiceInterface
         return $this->get();
     }
 
+    public function get(): array
+    {
+        $cart = Session::get($this->sessionKey, [
+            'items' => [],
+            'total_quantity' => 0,
+            'total_price' => 0
+        ]);
+
+        // Recalculate cart to ensure promotions are always fresh
+        if (!empty($cart['items'])) {
+            $this->save($cart);
+            $cart = Session::get($this->sessionKey);
+        }
+
+        // Self-Healing Logic
+        $hasUpdates = false;
+        foreach ($cart['items'] as &$item) {
+            $needsUpdate = empty($item['name']) || $item['name'] === 'Sản phẩm không tên' || 
+                           ($item['name'] === ' - ') ||
+                           (!empty($item['variant_id']) && empty($item['options']));
+
+            if ($needsUpdate) {
+                try {
+                    $product = $this->productService->show((int)$item['product_id']);
+                    if ($product) {
+                        $translatedName = $product->current_languages->first()?->pivot?->name ?? $product->name;
+                        $cartName = $translatedName ?: 'Sản phẩm không tên';
+                        $cartImage = $product->image ?: ($product->album[0] ?? null);
+
+                        if (!empty($item['variant_id'])) {
+                            $variant = $product->variants->where('id', $item['variant_id'])->first();
+                            if ($variant) {
+                                if ($variant->name) $cartName .= ' - ' . $variant->name;
+                                $item['options'] = $variant->name;
+                            }
+                        }
+
+                        $item['name'] = $cartName;
+                        if (empty($item['image'])) $item['image'] = $cartImage;
+                        $hasUpdates = true;
+                    }
+                } catch (\Exception $e) {}
+            }
+        }
+
+        if ($hasUpdates) {
+            Session::put($this->sessionKey, $cart);
+        }
+
+        return $cart;
+    }
+
     public function applyVoucher(string $code): array
     {
         $cart = $this->get();
         $voucherService = app(\App\Services\Impl\V1\Voucher\VoucherService::class);
-        
-        // Reset prices first to ensure clean calculation
-        // Need to refetch prices? Or just trust stored original/promo price?
-        // Trust stored for now, but in save() we recalculate.
-        
         $voucher = $voucherService->validateVoucher($code, $cart['items'], $cart['total_price']);
         
-        // If valid, store code
         $cart['voucher_code'] = $code;
         $cart['voucher_info'] = [
             'id' => $voucher->id,
@@ -281,7 +251,7 @@ class CartService implements CartServiceInterface
 
     public function count(): int
     {
-        $cart = $this->get();
+        $cart = Session::get($this->sessionKey, ['total_quantity' => 0]);
         return $cart['total_quantity'];
     }
 
@@ -292,125 +262,108 @@ class CartService implements CartServiceInterface
     
     protected function save(array $cart): void
     {
-        // 1. Calculate Raw Totals (before voucher)
         $totalQuantity = 0;
-        $rawTotalPrice = 0;
+        $totalRetailPrice = 0;
+        $totalProductDiscount = 0;
+        $subtotalAfterProductDiscount = 0;
 
-        foreach ($cart['items'] as $key => &$item) {
-             // Reset price to base promo price if needed (e.g. if BuyXGetY previously set it to 0)
-             // We stored 'promotion_info' with 'final_price'.
-             if (isset($item['promotion_info']['final_price'])) {
-                 $item['price'] = $item['promotion_info']['final_price'];
-             }
-        }
-        unset($item); // break ref
+        foreach ($cart['items'] as &$item) {
+            $pricing = $this->promotionPricingService->calculateFinalPrice(
+                !empty($item['variant_id']) 
+                    ? \App\Models\ProductVariant::find($item['variant_id']) 
+                    : \App\Models\Product::find($item['product_id']),
+                $item['quantity']
+            );
 
-        foreach ($cart['items'] as $item) {
+            $item['prices'] = [
+                'retail' => (float)$pricing['original_price'],
+                'promo' => (float)$pricing['final_price'],
+                'final_unit' => (float)$pricing['final_price']
+            ];
+            $item['product_promotions'] = $pricing['applied_promotions'] ?? [];
+            $item['price'] = (float)$pricing['final_price'];
+            
             $totalQuantity += $item['quantity'];
-            $rawTotalPrice += ($item['price'] * $item['quantity']);
+            $totalRetailPrice += ($pricing['original_price'] * $item['quantity']);
+            $totalProductDiscount += ($pricing['discount_amount'] * $item['quantity']);
+            $subtotalAfterProductDiscount += ($pricing['final_price'] * $item['quantity']);
         }
+
+        $orderPromotions = $this->promotionPricingService->getActiveOrderPromotions();
+        $combinableList = $orderPromotions->filter(fn($p) => $p->combine_with_product_discount);
+        
+        $stackableDiscount = 0;
+        $stackablePromos = [];
+        $standaloneBestDiscount = 0;
+        $standaloneBestPromo = null;
+
+        foreach ($combinableList as $promo) {
+            $discount = $this->promotionPricingService->calculateOrderPromotionDiscount($subtotalAfterProductDiscount, $promo);
+            if ($discount <= 0) continue;
+
+            if ($promo->combine_with_order_discount) {
+                $stackableDiscount += $discount;
+                $stackablePromos[] = ['id' => $promo->id, 'name' => $promo->name, 'amount' => $discount];
+            } else {
+                if ($discount > $standaloneBestDiscount) {
+                    $standaloneBestDiscount = $discount;
+                    $standaloneBestPromo = ['id' => $promo->id, 'name' => $promo->name, 'amount' => $discount];
+                }
+            }
+        }
+        
+        if ($stackableDiscount >= $standaloneBestDiscount && $stackableDiscount > 0) {
+            $combinableOrderDiscount = $stackableDiscount;
+            $combinableOrderPromos = $stackablePromos;
+        } else {
+            $combinableOrderDiscount = $standaloneBestDiscount;
+            $combinableOrderPromos = $standaloneBestPromo ? [$standaloneBestPromo] : [];
+        }
+        
+        $totalBenefit1 = $totalProductDiscount + $combinableOrderDiscount;
+
+        $bestSingleOrderDiscount = 0;
+        $bestSingleOrderPromo = null;
+        foreach ($orderPromotions as $promo) {
+            $discount = $this->promotionPricingService->calculateOrderPromotionDiscount($totalRetailPrice, $promo);
+            if ($discount > $bestSingleOrderDiscount) {
+                $bestSingleOrderDiscount = $discount;
+                $bestSingleOrderPromo = ['id' => $promo->id, 'name' => $promo->name, 'amount' => $discount];
+            }
+        }
+        
+        $appliedOrderPromos = [];
+        $orderDiscountTotal = 0;
+
+        if ($totalBenefit1 >= $bestSingleOrderDiscount) {
+            $orderDiscountTotal = $combinableOrderDiscount;
+            $appliedOrderPromos = $combinableOrderPromos;
+        } else {
+            $orderDiscountTotal = $bestSingleOrderDiscount;
+            $appliedOrderPromos = [$bestSingleOrderPromo];
+            foreach ($cart['items'] as &$item) {
+                $item['price'] = $item['prices']['retail'];
+                $item['prices']['final_unit'] = $item['prices']['retail'];
+                $item['product_promotions'] = [];
+            }
+            $totalProductDiscount = 0;
+            $subtotalAfterProductDiscount = $totalRetailPrice;
+        }
+
+        $cart['summary'] = [
+            'total_quantity' => $totalQuantity,
+            'total_retail' => $totalRetailPrice,
+            'total_product_discount' => $totalProductDiscount,
+            'subtotal' => $subtotalAfterProductDiscount,
+            'order_discount' => ['total' => $orderDiscountTotal, 'applied_promos' => $appliedOrderPromos],
+            'voucher_discount' => 0,
+            'final_total' => max(0, $subtotalAfterProductDiscount - $orderDiscountTotal)
+        ];
 
         $cart['total_quantity'] = $totalQuantity;
-        $cart['total_price'] = $rawTotalPrice; // Subtotal
-        $cart['discount_total'] = 0;
-        $cart['final_total'] = $rawTotalPrice;
-
-        // 2. Apply Voucher Logic if exists
-        if (!empty($cart['voucher_code']) && !empty($cart['voucher_info'])) {
-            $vInfo = $cart['voucher_info'];
-            $discountAmount = 0;
-            
-            // Re-validate strictly? Or assume modify actions clear voucher?
-            // Modify actions (add/update/remove) clear voucher, so here we assume it's validish,
-            // but effectively we should re-check minimal conditions if possible or just calculate.
-            
-            if ($vInfo['type'] === 'order_discount' || $vInfo['type'] === 'free_shipping') {
-                 // Free shipping usually affects shipping fee, not order total directly unless we just subtract value.
-                 // Assuming 'free_shipping' works as order discount for now based on previous code usage
-                 // or maybe separate field. Logic below assumes discount value.
-                 
-                 if ($vInfo['discount_type'] === 'percentage') {
-                     $discountAmount = $rawTotalPrice * ($vInfo['discount_value'] / 100);
-                     if (!empty($vInfo['max_discount_value']) && $vInfo['max_discount_value'] > 0) {
-                         $discountAmount = min($discountAmount, $vInfo['max_discount_value']);
-                     }
-                 } else { // fixed
-                     $discountAmount = $vInfo['discount_value'];
-                 }
-            } elseif ($vInfo['type'] === 'product_discount') {
-                // Not implemented: Per-item discount calculation for now.
-                // Assuming it works like order discount but restricted to items? 
-                // Or acts on specific items? 
-                // Previous logic treated it as modifying eligiblity.
-                // Simplicity: Calculate total discount based on applicable items sum?
-                // Let's assume order discount behavior for now or User didn't specify strict product-level price change.
-                // Actually User said "tính toán lại toàn bộ giỏ hàng", "tùy vào loại voucher".
-                // Let's try simple total discount first.
-                 if ($vInfo['discount_type'] === 'percentage') {
-                     $discountAmount = $rawTotalPrice * ($vInfo['discount_value'] / 100);
-                     if (!empty($vInfo['max_discount_value']) && $vInfo['max_discount_value'] > 0) {
-                         $discountAmount = min($discountAmount, $vInfo['max_discount_value']);
-                     }
-                 } else {
-                     $discountAmount = $vInfo['discount_value'];
-                 }
-            } elseif ($vInfo['type'] === 'buy_x_get_y') {
-                 // Logic: Find GET items in cart, make them free (price = 0)
-                 // We need to fetch GET items definition again? Or store in voucher_info?
-                 // Storing is better. But existing validateVoucher didn't return GET structure.
-                 // Let's fetch quickly.
-                 $getItems = \Illuminate\Support\Facades\DB::table('voucher_buy_x_get_y_items')
-                    ->where('voucher_id', $vInfo['id'])
-                    ->where('item_type', 'get')
-                    ->get();
-                 
-                 foreach ($getItems as $getItem) {
-                      foreach ($cart['items'] as &$item) {
-                          $isTarget = false;
-                          if ($getItem->apply_type === 'product' && $item['product_id'] == $getItem->product_id) {
-                              $isTarget = true;
-                          } elseif ($getItem->apply_type === 'product_variant' && isset($item['variant_id']) && $item['variant_id'] == $getItem->product_variant_id) {
-                              $isTarget = true;
-                          } elseif ($getItem->apply_type === 'product_catalogue') {
-                               // Check catalogue
-                               $inCatalogue = \Illuminate\Support\Facades\DB::table('product_catalogue_product')
-                                  ->where('product_id', $item['product_id'])
-                                  ->where('product_catalogue_id', $getItem->product_catalogue_id)
-                                  ->exists();
-                               if ($inCatalogue) $isTarget = true;
-                          }
-                          
-                          if ($isTarget) {
-                              // Found a GET item. Set price to 0 or discount?
-                              // Usually FREE.
-                              // Check qty. If cart has 2, get 1 free? Or all free?
-                              // "quantity" in DB usually means "Get Qty".
-                              // Simplicity: Make ALL of them free or limit? 
-                              // Logic usually: Buy X get Y (1). If specific qty logic needed, it's complex.
-                              // Assuming "Get Y" means "Set price of Y to 0 for matching items up to quantity limit".
-                              
-                              $discountableQty = min($item['quantity'], $getItem->quantity); // Limit free items
-                              if ($discountableQty > 0) {
-                                  // For display, we can set price to 0????
-                                  // Or just enable discount_total.
-                                  // Setting price to 0 affects total directly.
-                                  // BUT we calculated total previously.
-                                  // Let's reduce total.
-                                  $itemDiscount = $item['price'] * $discountableQty;
-                                  $discountAmount += $itemDiscount;
-                                  
-                                  // Mark it in options or similar?
-                                  // Maybe split item line? Too complex.
-                                  // Just reduce Total Price.
-                              }
-                          }
-                      }
-                 }
-            }
-
-            $cart['discount_total'] = $discountAmount;
-            $cart['final_total'] = max(0, $rawTotalPrice - $discountAmount);
-        }
+        $cart['total_price'] = $subtotalAfterProductDiscount;
+        $cart['discount_total'] = $orderDiscountTotal;
+        $cart['final_total'] = $cart['summary']['final_total'];
 
         Session::put($this->sessionKey, $cart);
     }
