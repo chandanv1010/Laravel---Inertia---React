@@ -956,6 +956,7 @@ export default function BuyXGetY({
                         onOpenChange={setShowBuyProductModal}
                         onConfirm={handleBuyProductsSelected}
                         initialSelectedIds={buySelectedProducts.map(p => p.id)}
+                        initialSelectedProducts={buySelectedProducts}
                     />
 
                     <CategorySelectionModal
@@ -970,6 +971,7 @@ export default function BuyXGetY({
                         onOpenChange={setShowGetProductModal}
                         onConfirm={handleGetProductsSelected}
                         initialSelectedIds={getSelectedProducts.map(p => p.id)}
+                        initialSelectedProducts={getSelectedProducts}
                     />
 
                     <CategorySelectionModal

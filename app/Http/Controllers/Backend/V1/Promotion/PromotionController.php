@@ -263,11 +263,20 @@ class PromotionController extends BaseController
                     $productItems = [];
                     
                     if (!empty($buyProductIds)) {
-                        $products = \App\Models\Product::whereIn('id', $buyProductIds)->get();
+                        $products = \App\Models\Product::with(['current_languages', 'languages'])->whereIn('id', $buyProductIds)->get();
                         foreach ($products as $product) {
+                            $productName = '';
+                            if ($product->current_languages->isNotEmpty()) {
+                                $productName = $product->current_languages->first()->pivot->name ?? '';
+                            } elseif ($product->languages->isNotEmpty()) {
+                                $productName = $product->languages->first()->pivot->name ?? '';
+                            }
+                            
+                            $productName = $productName ?: ($product->name ?? '');
+
                             $productItems[] = [
                                 'id' => $product->id,
-                                'name' => $product->current_language->name ?? $product->name ?? '',
+                                'name' => $productName,
                                 'sku' => $product->sku ?? '',
                                 'image' => (isset($product->album) && is_array($product->album) && count($product->album) > 0) 
                                     ? $product->album[0] 
@@ -277,11 +286,23 @@ class PromotionController extends BaseController
                     }
                     
                     if (!empty($buyVariantIds)) {
-                        $variants = \App\Models\ProductVariant::with('product')->whereIn('id', $buyVariantIds)->get();
+                        $variants = \App\Models\ProductVariant::with(['product.current_languages', 'product.languages'])->whereIn('id', $buyVariantIds)->get();
                         foreach ($variants as $variant) {
+                            $productName = '';
+                            if ($variant->product) {
+                                if ($variant->product->current_languages->isNotEmpty()) {
+                                    $productName = $variant->product->current_languages->first()->pivot->name ?? '';
+                                } elseif ($variant->product->languages->isNotEmpty()) {
+                                    $productName = $variant->product->languages->first()->pivot->name ?? '';
+                                }
+                                $productName = $productName ?: ($variant->product->name ?? '');
+                            }
+                            
+                            $displayName = $variant->name ?: $productName;
+
                             $productItems[] = [
                                 'id' => $variant->id,
-                                'name' => $variant->name ?? ($variant->product ? $variant->product->name : ''),
+                                'name' => $displayName,
                                 'sku' => $variant->sku,
                                 'image' => ($variant->product && isset($variant->product->album) && is_array($variant->product->album) && count($variant->product->album) > 0) 
                                     ? $variant->product->album[0] 
@@ -349,11 +370,20 @@ class PromotionController extends BaseController
                     $productItems = [];
                     
                     if (!empty($getProductIds)) {
-                        $products = \App\Models\Product::whereIn('id', $getProductIds)->get();
+                        $products = \App\Models\Product::with(['current_languages', 'languages'])->whereIn('id', $getProductIds)->get();
                         foreach ($products as $product) {
+                            $productName = '';
+                            if ($product->current_languages->isNotEmpty()) {
+                                $productName = $product->current_languages->first()->pivot->name ?? '';
+                            } elseif ($product->languages->isNotEmpty()) {
+                                $productName = $product->languages->first()->pivot->name ?? '';
+                            }
+                            
+                            $productName = $productName ?: ($product->name ?? '');
+
                             $productItems[] = [
                                 'id' => $product->id,
-                                'name' => $product->current_language->name ?? $product->name ?? '',
+                                'name' => $productName,
                                 'sku' => $product->sku ?? '',
                                 'image' => (isset($product->album) && is_array($product->album) && count($product->album) > 0) 
                                     ? $product->album[0] 
@@ -363,11 +393,23 @@ class PromotionController extends BaseController
                     }
                     
                     if (!empty($getVariantIds)) {
-                        $variants = \App\Models\ProductVariant::with('product')->whereIn('id', $getVariantIds)->get();
+                        $variants = \App\Models\ProductVariant::with(['product.current_languages', 'product.languages'])->whereIn('id', $getVariantIds)->get();
                         foreach ($variants as $variant) {
+                            $productName = '';
+                            if ($variant->product) {
+                                if ($variant->product->current_languages->isNotEmpty()) {
+                                    $productName = $variant->product->current_languages->first()->pivot->name ?? '';
+                                } elseif ($variant->product->languages->isNotEmpty()) {
+                                    $productName = $variant->product->languages->first()->pivot->name ?? '';
+                                }
+                                $productName = $productName ?: ($variant->product->name ?? '');
+                            }
+                            
+                            $displayName = $variant->name ?: $productName;
+
                             $productItems[] = [
                                 'id' => $variant->id,
-                                'name' => $variant->name ?? ($variant->product ? $variant->product->name : ''),
+                                'name' => $displayName,
                                 'sku' => $variant->sku,
                                 'image' => ($variant->product && isset($variant->product->album) && is_array($variant->product->album) && count($variant->product->album) > 0) 
                                     ? $variant->product->album[0] 

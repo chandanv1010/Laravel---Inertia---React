@@ -59,7 +59,7 @@ export function WarehouseBatchListModal({
     const [adjustValue, setAdjustValue] = useState<string>("")
     const [adjustDelta, setAdjustDelta] = useState<string>("0")
     const [adjustReason, setAdjustReason] = useState<string>("Thực tế")
-    const [adjustWarehouseId, setAdjustWarehouseId] = useState<string | number | null>(null)
+    const [adjustWarehouseId, setAdjustWarehouseId] = useState<string | number>("")
     const [saving, setSaving] = useState(false)
 
     // Helper to get cookie
@@ -178,7 +178,7 @@ export function WarehouseBatchListModal({
             ? warehouseDist[0] 
             : null
         
-        const selectedWarehouseId = firstWarehouse?.warehouse_id || batch.warehouse_id || warehouseId
+        const selectedWarehouseId = firstWarehouse?.warehouse_id || batch.warehouse_id || warehouseId || ""
         setAdjustWarehouseId(selectedWarehouseId)
         
         // Hiển thị tồn kho của kho được chọn
@@ -214,7 +214,7 @@ export function WarehouseBatchListModal({
             if (response.ok) {
                 toast.success('Cập nhật tồn kho thành công')
                 setEditingBatchId(null)
-                setAdjustWarehouseId(null)
+                setAdjustWarehouseId("")
                 await fetchBatches()
                 onRefresh?.() // Notify parent to refresh general layout if needed
             } else {
@@ -359,7 +359,7 @@ export function WarehouseBatchListModal({
                                                                         onValueChange={(value) => {
                                                                             const warehouseDist = batch.warehouse_distribution || []
                                                                             const selectedWarehouse = warehouseDist.find(w => String(w.warehouse_id) === value)
-                                                                            setAdjustWarehouseId(value)
+                                                                            setAdjustWarehouseId(value || "")
                                                                             
                                                                             // Cập nhật tồn kho theo kho được chọn
                                                                             const currentStock = selectedWarehouse?.stock_quantity || 0
@@ -430,7 +430,7 @@ export function WarehouseBatchListModal({
                                                                 <div className="flex justify-end gap-2">
                                                                     <Button variant="outline" size="sm" onClick={() => {
                                                                         setEditingBatchId(null)
-                                                                        setAdjustWarehouseId(null)
+                                                                        setAdjustWarehouseId("")
                                                                     }}>Hủy</Button>
                                                                     <Button size="sm" onClick={() => handleSaveAdjust(batch.id)} disabled={saving}>
                                                                         {saving ? 'Lưu...' : 'Lưu'}

@@ -25,4 +25,9 @@ interface VoucherServiceInterface extends BaseServiceInterface
      * Lấy danh sách voucher áp dụng cho sản phẩm cụ thể
      */
     public function getApplicableVouchersForProduct(int $productId): array;
+
+    /**
+     * Tính toán số tiền giảm giá của voucher cho giỏ hàng
+     */
+    public function calculateVoucherDiscount(array $voucherInfo, array $cartItems, float $subtotal): float;
 }

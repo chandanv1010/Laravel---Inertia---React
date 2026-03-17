@@ -1124,4 +1124,71 @@ class VoucherService extends BaseCacheService implements VoucherServiceInterface
         
         return parent::afterSave();
     }
+
+    /**
+     * Tính toán số tiền giảm giá của voucher cho giỏ hàng
+     */
+    public function calculateVoucherDiscount(array $voucherInfo, array $cartItems, float $subtotal): float
+    {
+        $voucher = $this->repository->getModel()->where('code', $voucherInfo['code'])->first();
+        if (!$voucher) return 0;
+
+        $discount = 0;
+        // 1. Giảm giá trên tổng đơn hoặc Freeship
+        if ($voucher->type === 'order_discount' || $voucher->type === 'free_shipping') {
+            if ($voucher->discount_type === 'percentage') {
+                $discount = $subtotal * ($voucher->discount_value / 100);
+                if ($voucher->max_discount_value > 0) {
+                    $discount = min($discount, $voucher->max_discount_value);
+                }
+            } else {
+                $discount = $voucher->discount_value;
+            }
+        } 
+        // 2. Giảm giá theo sản phẩm
+        elseif ($voucher->type === 'product_discount') {
+            foreach ($cartItems as $item) {
+                // Quà tặng không được tính vào chiết khấu voucher
+                if (!empty($item['is_gift'])) continue;
+
+                $isApplicable = false;
+                if ($voucher->apply_source === 'all') {
+                    $isApplicable = true;
+                } elseif ($voucher->apply_source === 'product_variant') {
+                    $isApplicable = DB::table('voucher_product_variant')
+                        ->where('voucher_id', $voucher->id)
+                        ->where(function($q) use ($item) {
+                            $q->where('product_id', $item['product_id'])
+                              ->orWhere('product_variant_id', $item['variant_id'] ?? 0);
+                        })->exists();
+                } elseif ($voucher->apply_source === 'product_catalogue') {
+                    $catalogueIds = DB::table('product_catalogue_product')
+                        ->where('product_id', $item['product_id'])
+                        ->pluck('product_catalogue_id');
+                    if ($catalogueIds->isNotEmpty()) {
+                        $isApplicable = DB::table('voucher_product_catalogue')
+                            ->where('voucher_id', $voucher->id)
+                            ->whereIn('product_catalogue_id', $catalogueIds)->exists();
+                    }
+                }
+
+                if ($isApplicable) {
+                    $itemTotal = ($item['price'] ?? 0) * $item['quantity'];
+                    if ($voucher->discount_type === 'percentage') {
+                        $itemDiscount = $itemTotal * ($voucher->discount_value / 100);
+                        if ($voucher->max_discount_value > 0) {
+                            $itemDiscount = min($itemDiscount, $voucher->max_discount_value);
+                        }
+                        $discount += $itemDiscount;
+                    } else {
+                        // Fixed amount usually applies once per order for product discount vouchers in this system
+                        $discount = $voucher->discount_value;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return min(max($discount, 0), $subtotal);
+    }
 }

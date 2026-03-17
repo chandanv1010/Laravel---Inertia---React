@@ -15,12 +15,24 @@ import { CSS } from '@dnd-kit/utilities';
  * - DB có thể lưu dạng `userfiles/...` (không có / đầu)
  * - Cần thêm / để tránh browser ghép relative với URL hiện tại
  */
-function normalizeImageUrl(url: string): string {
-    if (!url) return ''
+function normalizeImageUrl(url: any): string {
+    if (!url || typeof url !== 'string') return ''
     if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
         return url
     }
     return '/' + url
+}
+
+function generateUUID(): string {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    // Fallback for non-secure contexts
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
 }
 
 
@@ -76,6 +88,11 @@ const ImageItem = React.memo(({
     const [imgLoaded, setImgLoaded] = useState(false)
     const [imgError, setImgError] = useState(false)
 
+    useEffect(() => {
+        const normalizedSrc = normalizeImageUrl(src)
+        console.log(`[CustomAlbum] Rendering ImageItem: URL=${src}, Normalized=${normalizedSrc}`)
+    }, [src])
+
     const normalizedSrc = normalizeImageUrl(src)
 
     const style = {
@@ -108,9 +125,15 @@ const ImageItem = React.memo(({
                     src={normalizedSrc}
                     loading="lazy"
                     className="object-cover w-full h-[150px] border-0 outline-none"
-                    style={{ display: imgLoaded ? 'block' : 'none' }}
-                    onLoad={() => setImgLoaded(true)}
-                    onError={() => { setImgLoaded(false); setImgError(true) }}
+                    onLoad={() => {
+                        console.log(`[CustomAlbum] Success: ${normalizedSrc}`);
+                        setImgLoaded(true);
+                    }}
+                    onError={() => {
+                        console.error(`[CustomAlbum] Error loading: ${normalizedSrc}`);
+                        setImgLoaded(false);
+                        setImgError(true);
+                    }}
                 />
             )}
 
@@ -166,27 +189,36 @@ export default function CustomAlbum({
     }, [])
 
     useEffect(() => {
-        // Only update from props if data actually changed
-        const dataKey = data ? JSON.stringify([...data].sort()) : 'empty'
-        if (dataRef.current === dataKey) {
-            return // No change
+        // Handle input data carefully (could be array or JSON string)
+        let normalizedData: string[] = [];
+        const inputData: any = data;
+        if (Array.isArray(inputData)) {
+            normalizedData = inputData;
+        } else if (typeof inputData === 'string' && inputData.trim().startsWith('[')) {
+            try {
+                normalizedData = JSON.parse(inputData);
+            } catch (e) {
+                console.error("Failed to parse album data string", e);
+            }
         }
 
-        dataRef.current = dataKey
+        // Only update from props if data actually changed
+        const dataKey = normalizedData.length > 0 ? JSON.stringify([...normalizedData].sort()) : 'empty';
+        if (dataRef.current === dataKey) {
+            return; // No change
+        }
 
-        if (data && data.length > 0) {
-            isInternalUpdate.current = false
-            const currentUrls = images.map(img => img.url).sort().join(',')
-            const newUrls = [...data].sort().join(',')
-            if (currentUrls !== newUrls) {
-                setImages(data.map(url => ({
-                    id: crypto.randomUUID(),
-                    url
-                })))
-            }
-        } else if ((!data || data.length === 0) && images.length > 0) {
-            isInternalUpdate.current = false
-            setImages([])
+        dataRef.current = dataKey;
+
+        if (normalizedData.length > 0) {
+            isInternalUpdate.current = false;
+            setImages(normalizedData.map(url => ({
+                id: generateUUID(),
+                url
+            })));
+        } else if (images.length > 0) {
+            isInternalUpdate.current = false;
+            setImages([]);
         }
     }, [data])
 
@@ -210,7 +242,7 @@ export default function CustomAlbum({
                         setImages(prev => [
                             ...prev,
                             ...allFiles.map(file => ({
-                                id: crypto.randomUUID(),
+                                id: generateUUID(),
                                 url: file.url
                             }))
                         ]);

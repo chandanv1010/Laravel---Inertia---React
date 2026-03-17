@@ -666,6 +666,102 @@ class PromotionPricingService
     }
 
     /**
+     * Lấy các chương trình Mua X Tặng Y có liên quan đến sản phẩm này
+     * (Sản phẩm này đóng vai trò là "Mua X")
+     */
+    public function getBuyXGetYForProduct($entity): Collection
+    {
+        if (is_numeric($entity)) {
+            $entity = Product::with('product_catalogues')->find($entity);
+        }
+
+        if (!$entity) return collect([]);
+
+        $isVariant = $entity instanceof \App\Models\ProductVariant;
+        $product = $isVariant ? $entity->product : $entity;
+        
+        if (!$product) return collect([]);
+
+        $productId = $product->id;
+        $variantId = $isVariant ? $entity->id : null;
+        $catalogueIds = $product->product_catalogues->pluck('id')->toArray();
+        
+        // 1. Lấy tất cả khuyến mãi Buy X Get Y đang active
+        $promotions = Promotion::where('publish', 2)
+            ->where('type', 'buy_x_get_y')
+            ->expiryStatus('active')
+            ->where(function ($q) {
+                $q->where('start_date', '<=', now())
+                    ->orWhereNull('start_date');
+            })
+            ->with('buy_x_get_y_items')
+            ->get();
+
+        $applicablePromos = collect([]);
+
+        foreach ($promotions as $promo) {
+            $buyItems = $promo->buy_x_get_y_items->where('item_type', 'buy');
+            
+            $isMatch = false;
+            foreach ($buyItems as $item) {
+                if ($item->apply_type === 'product' && $item->product_id == $productId) {
+                    $isMatch = true;
+                    break;
+                }
+
+                if ($item->apply_type === 'product_variant' && $variantId && $item->product_variant_id == $variantId) {
+                    $isMatch = true;
+                    break;
+                }
+                
+                if ($item->apply_type === 'product_catalogue') {
+                    if (in_array($item->product_catalogue_id, $catalogueIds)) {
+                        $isMatch = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($isMatch) {
+                // Đính kèm thêm thông tin sản phẩm "Tặng Y" để Frontend hiển thị
+                $getItems = $promo->buy_x_get_y_items->where('item_type', 'get');
+                $rewardDetails = [];
+                
+                foreach ($getItems as $getItem) {
+                    $giftEntity = null;
+                    if ($getItem->apply_type === 'product') {
+                        $giftEntity = Product::find($getItem->product_id);
+                    } elseif ($getItem->apply_type === 'product_variant') {
+                        $giftEntity = \App\Models\ProductVariant::find($getItem->product_variant_id);
+                    }
+
+                    if ($giftEntity) {
+                        $isV = $giftEntity instanceof \App\Models\ProductVariant;
+                        $giftProduct = $isV ? $giftEntity->product : $giftEntity;
+
+                        $rewardDetails[] = [
+                            'product_id' => $giftProduct->id,
+                            'variant_id' => $isV ? $giftEntity->id : null,
+                            'name' => ($isV && $giftEntity->name) ? ($giftProduct->name . ' - ' . $giftEntity->name) : ($giftProduct->name ?? 'Sản phẩm quà tặng'),
+                            'sku' => $giftEntity->sku ?? $giftProduct->sku ?? '',
+                            'image' => $giftEntity->image ?: $giftProduct->image,
+                            'price' => $giftEntity->retail_price ?? $giftProduct->retail_price,
+                            'quantity' => $getItem->quantity,
+                            'discount_type' => $promo->discount_type, // free, fixed_amount, percentage
+                            'discount_value' => $promo->discount_value,
+                        ];
+                    }
+                }
+                
+                $promo->reward_details = $rewardDetails;
+                $applicablePromos->push($promo);
+            }
+        }
+
+        return $applicablePromos;
+    }
+
+    /**
      * Trả về kết quả giá mặc định (không giảm giá)
      */
     private function emptyPriceResult(float $originalPrice): array

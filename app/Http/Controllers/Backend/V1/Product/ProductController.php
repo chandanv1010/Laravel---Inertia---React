@@ -65,9 +65,23 @@ class ProductController extends BaseController
      */
     public function index(Request $request): Response|JsonResponse
     {
-        $this->authorize('modules', 'product:index');
+        // Lite version of relations for listing
+        $liteWith = [
+            'current_languages',
+            'product_catalogues.current_languages',
+            'languages', // CRITICAL for translation flags
+            'variants',
+            'variants.product', 
+            'variants.warehouseStocks',
+            'variants.batches.warehouseStocks', // For batch-managed variants
+            'warehouseStocks',
+            'batches.warehouseStocks', // For batch-managed products
+            'pricingTiers', // For wholesale price display
+            'variants.attributes', // For variant attribute identification
+            'variants.attributes.attribute_catalogue.current_languages',
+        ];
 
-        $records = $this->service->paginate($request);
+        $records = $this->service->setWith($liteWith)->paginate($request);
 
         // Eager load promotions pricing data to avoid N+1 queries from variants
         $productIds = collect($records->items())->pluck('id')->toArray();

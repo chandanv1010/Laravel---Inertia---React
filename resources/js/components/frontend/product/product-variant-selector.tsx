@@ -29,6 +29,8 @@ interface Variant {
 interface ProductVariantSelectorProps {
     attributeCatalogues: AttributeCatalogue[];
     variants: Variant[];
+    trackInventory?: boolean;
+    allowNegative?: boolean;
     onVariantChange: (variant: Variant | null) => void;
     onStockStatusChange?: (allOutOfStock: boolean) => void;
 }
@@ -36,6 +38,8 @@ interface ProductVariantSelectorProps {
 export default function ProductVariantSelector({
     attributeCatalogues,
     variants,
+    trackInventory = true,
+    allowNegative = false,
     onVariantChange,
     onStockStatusChange
 }: ProductVariantSelectorProps) {
@@ -43,14 +47,15 @@ export default function ProductVariantSelector({
     const [currentVariant, setCurrentVariant] = useState<Variant | null>(null);
 
     // Check if all variants are out of stock
-    const allVariantsOutOfStock = variants.every(v => v.stock_quantity <= 0);
+    const isOutOfStockCheck = (v: Variant) => trackInventory && !allowNegative && v.stock_quantity <= 0;
+    const allVariantsOutOfStock = variants.every(v => isOutOfStockCheck(v));
 
     // Initialize: auto-select first AVAILABLE variant
     useEffect(() => {
         if (attributeCatalogues.length === 0 || variants.length === 0) return;
 
-        // Find first variant with stock > 0
-        const firstAvailableVariant = variants.find(v => v.stock_quantity > 0);
+        // Find first variant that is NOT out of stock based on inventory rules
+        const firstAvailableVariant = variants.find(v => !isOutOfStockCheck(v));
 
         if (firstAvailableVariant) {
             // Extract attribute IDs from this variant
@@ -119,7 +124,7 @@ export default function ProductVariantSelector({
         };
 
         const variant = findMatchingVariant(testSelection);
-        return variant !== null && variant.stock_quantity > 0;
+        return variant !== null && !isOutOfStockCheck(variant);
     };
 
     // Get variant image for color swatch
@@ -168,7 +173,7 @@ export default function ProductVariantSelector({
                             [catalogue.id]: value.id
                         };
                         const testVariant = findMatchingVariant(testSelection);
-                        if (testVariant && testVariant.stock_quantity > 0) {
+                        if (testVariant && !isOutOfStockCheck(testVariant)) {
                             // Found an available combination!
                             setSelectedAttributes(testSelection);
                             return;

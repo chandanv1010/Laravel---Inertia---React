@@ -658,7 +658,7 @@ export default function ProductSave({ record, catalogues, brands = [], warehouse
                                                 />
                                             </CustomCard>
                                             <CustomAlbum
-                                                data={record?.album}
+                                                data={images}
                                                 onDataChange={handleAlbumImagesChange}
                                             />
 

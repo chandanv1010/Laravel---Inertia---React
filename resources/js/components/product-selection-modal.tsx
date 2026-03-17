@@ -206,10 +206,10 @@ export function ProductSelectionModal({
                 initialSelectedIds.forEach(id => {
                     const key = String(id);
                     initialSet.add(key);
-                    // Tạo object tạm với id, sẽ được cập nhật khi load products
+                    // Tạo object tạm với id, sẽ được cập nhật khi load products hoặc giữ lại nếu không load được
                     initialMap.set(key, {
                         id: id,
-                        name: `Product ${id}`,
+                        name: `Đang tải (ID: ${id})...`,
                         sku: '',
                     });
                 });

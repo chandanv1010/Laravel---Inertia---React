@@ -25,17 +25,19 @@ export default function ProductInfo({ product, catalogue, selectedVariant, allOu
 
     const hasDiscount = product.sale_price && product.sale_price < product.price;
 
+    const trackInventory = product.track_inventory ?? true;
+    const allowNegative = product.allow_negative_stock ?? false;
+
     // Determine valid stock
-    // For simple products, check multiple probable fields. If undefined/null, default to In Stock (e.g. 999) to avoid blocking sales on missing data.
-    // If it is explicitly 0, it will be respected.
     const simpleStock = product.quantity ?? product.stock ?? product.stock_quantity ?? product.total_stock;
     const currentStock = selectedVariant ? (selectedVariant.stock_quantity ?? 0) : (simpleStock ?? 999);
 
-    const isOutOfStock = currentStock <= 0;
-    const isLimitReached = quantity >= currentStock;
+    const isOutOfStock = trackInventory && !allowNegative && currentStock <= 0;
+    // Limit reached only if tracking inventory AND not allowing negative stock
+    const isLimitReached = trackInventory && !allowNegative && quantity >= currentStock;
 
     const handleAddToCart = async () => {
-        if (isOutOfStock || quantity > currentStock) return;
+        if (isOutOfStock || (trackInventory && !allowNegative && quantity > currentStock)) return;
 
         setIsAdding(true);
         try {
@@ -61,14 +63,14 @@ export default function ProductInfo({ product, catalogue, selectedVariant, allOu
     };
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col">
             {/* Stock Display */}
             <div className="mb-4 text-sm font-medium">
                 {isOutOfStock ? (
                     <span className="text-red-500">Hết hàng</span>
                 ) : (
                     <span className="text-green-600">
-                        {currentStock < 999 ? `Còn lại: ${currentStock} sản phẩm` : 'Còn hàng'}
+                        {trackInventory ? (currentStock < 999 ? `Còn lại: ${currentStock} sản phẩm` : 'Còn hàng') : 'Còn hàng'}
                     </span>
                 )}
             </div>
@@ -113,10 +115,10 @@ export default function ProductInfo({ product, catalogue, selectedVariant, allOu
                     {/* Add to cart button - Black Pill */}
                     <button
                         onClick={handleAddToCart}
-                        disabled={isOutOfStock || isAdding || quantity > currentStock}
+                        disabled={isOutOfStock || isAdding || (trackInventory && !allowNegative && quantity > currentStock)}
                         className={`
                             flex-1 font-bold rounded-full transition-all flex items-center justify-center gap-2 px-6
-                            ${isOutOfStock || quantity > currentStock
+                            ${isOutOfStock || (trackInventory && !allowNegative && quantity > currentStock)
                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                 : 'bg-gray-900 text-white hover:bg-gray-800 hover:shadow-lg transform active:scale-[0.98] cursor-pointer'}
                         `}

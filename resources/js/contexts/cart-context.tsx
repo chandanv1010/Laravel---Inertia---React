@@ -11,6 +11,8 @@ interface CartItem {
     quantity: number;
     options?: any;
     original_price?: number;
+    product_promotions?: any[];
+    is_gift?: boolean;
 }
 
 interface CartContextType {
@@ -27,6 +29,7 @@ interface CartContextType {
     discountTotal: number;
     finalTotal: number;
     voucherCode?: string;
+    cart: any; // Raw cart data including eligible_rewards
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -39,6 +42,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     const [finalTotal, setFinalTotal] = useState(0);
     const [voucherCode, setVoucherCode] = useState<string | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(false);
+    const [cart, setCart] = useState<any>({ items: {}, summary: {}, eligible_rewards: [] });
 
     const refreshCart = async () => {
         try {
@@ -51,6 +55,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
                 setVoucherCode(data.voucher_code);
+                setCart(data);
             }
         } catch (error) {
             console.error('Failed to fetch cart', error);
@@ -74,12 +79,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 const data = response.data.data;
                 setCartItems(Object.values(data.items));
                 setCartCount(data.total_quantity);
-                setCartItems(Object.values(data.items));
-                setCartCount(data.total_quantity);
                 setCartTotal(data.total_price);
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
                 setVoucherCode(data.voucher_code);
+                setCart(data);
                 return response.data;
             }
         } catch (error) {
@@ -99,12 +103,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 const data = response.data.data;
                 setCartItems(Object.values(data.items));
                 setCartCount(data.total_quantity);
-                setCartItems(Object.values(data.items));
-                setCartCount(data.total_quantity);
                 setCartTotal(data.total_price);
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
                 setVoucherCode(data.voucher_code);
+                setCart(data);
             }
         } catch (error) {
             console.error('Remove failed', error);
@@ -122,12 +125,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 const data = response.data.data;
                 setCartItems(Object.values(data.items));
                 setCartCount(data.total_quantity);
-                setCartItems(Object.values(data.items));
-                setCartCount(data.total_quantity);
                 setCartTotal(data.total_price);
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
                 setVoucherCode(data.voucher_code);
+                setCart(data);
             }
         } catch (error) {
             console.error('Update quantity failed', error);
@@ -168,6 +170,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
                 setVoucherCode(data.voucher_code);
+                setCart(data);
                 return response.data;
             }
         } catch (error) {
@@ -180,7 +183,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
     return (
         <CartContext.Provider value={{
-            cartItems, cartCount, cartTotal, discountTotal, finalTotal, voucherCode,
+            cartItems, cartCount, cartTotal, discountTotal, finalTotal, voucherCode, cart,
             addToCart, removeFromCart, updateQuantity, clearCart, refreshCart, applyVoucher, isLoading
         }}>
             {children}

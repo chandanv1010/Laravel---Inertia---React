@@ -116,6 +116,14 @@ class Promotion extends Model
     }
 
     /**
+     * Get the buy x get y items for this promotion (for type = buy_x_get_y)
+     */
+    public function buy_x_get_y_items()
+    {
+        return $this->hasMany(PromotionBuyXGetYItem::class, 'promotion_id');
+    }
+
+    /**
      * Scope để filter theo tình trạng hết hạn/còn hạn
      * 
      * @param \Illuminate\Database\Eloquent\Builder $query

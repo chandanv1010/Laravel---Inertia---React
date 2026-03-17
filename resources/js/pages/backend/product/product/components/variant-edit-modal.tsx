@@ -155,8 +155,8 @@ export function VariantEditModal({
                                 </Tooltip>
                             </div>
                             <PriceInput
-                                value={localVariant.retail_price}
-                                onValueChange={(v) => handleChange('retail_price', v)}
+                                value={localVariant.retail_price ?? 0}
+                                onValueChange={(v) => handleChange('retail_price', v ?? 0)}
                                 className="font-normal"
                             />
                         </div>
@@ -173,8 +173,8 @@ export function VariantEditModal({
                                 </Tooltip>
                             </div>
                             <PriceInput
-                                value={localVariant.wholesale_price || 0}
-                                onValueChange={(v) => handleChange('wholesale_price', v)}
+                                value={localVariant.wholesale_price ?? 0}
+                                onValueChange={(v) => handleChange('wholesale_price', v ?? 0)}
                                 className="font-normal"
                             />
                         </div>
@@ -191,8 +191,8 @@ export function VariantEditModal({
                                 </Tooltip>
                             </div>
                             <PriceInput
-                                value={localVariant.cost_price}
-                                onValueChange={(v) => handleChange('cost_price', v)}
+                                value={localVariant.cost_price ?? 0}
+                                onValueChange={(v) => handleChange('cost_price', v ?? 0)}
                                 className="font-normal"
                                 data-testid="variant-cost-price"
                             />

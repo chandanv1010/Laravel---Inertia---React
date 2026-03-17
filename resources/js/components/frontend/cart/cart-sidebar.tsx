@@ -11,7 +11,7 @@ interface CartSidebarProps {
 }
 
 export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
-    const { cartItems, cartTotal, discountTotal, finalTotal, removeFromCart, addToCart, clearCart } = useCart();
+    const { cart, cartItems, cartTotal, discountTotal, finalTotal, removeFromCart, addToCart, clearCart } = useCart();
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
 
     // Check if all items are selected based on IDs match
@@ -96,11 +96,7 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
 
     const handleAddPromoItem = async (product: any) => {
         try {
-            if (product.variants && product.variants.length > 0) {
-                await addToCart(product.id, null, 1);
-            } else {
-                await addToCart(product.id, null, 1);
-            }
+            await addToCart(product.id, product.variant_id || null, 1);
         } catch (error) {
             console.error("Failed to add promo item", error);
         }
@@ -214,6 +210,24 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
                 </h3>
                 <VoucherList />
 
+                {/* Applied Buy X Get Y Promotions (Free Gifts) */}
+                {cartItems.some(item => item.is_gift) && (
+                    <div className="bg-green-50 rounded-lg p-3 border border-green-100 mt-4">
+                        <div className="flex items-center gap-2 text-green-700 font-bold text-sm mb-2">
+                            <Gift size={16} />
+                            Quà tặng & Ưu đãi đã áp dụng
+                        </div>
+                        <ul className="space-y-1.5">
+                            {cartItems.filter(item => item.is_gift).map((item, idx) => (
+                                <li key={idx} className="text-xs text-green-600 flex justify-between items-center">
+                                    <span>• {item.name} x{item.quantity}</span>
+                                    <span className="font-bold">Miễn phí</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
                 <div className="border-t border-dashed pt-4 space-y-3">
                     <div className="flex justify-between text-sm text-gray-600">
                         <span>Tạm tính</span>
@@ -242,25 +256,54 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
                 </button>
             </div>
 
-            {/* 4. Promo Slide */}
-            {promoProducts.length > 0 && (
-                <div className="rounded-xl overflow-hidden border border-[#FF0032] bg-white shadow-sm mt-2">
-                    <div className="p-3 bg-[#FF0032] text-white text-sm font-bold flex items-center gap-2 rounded-t-sm">
+            {/* 4. Eligible Rewards (BXGY Discounted Offers) */}
+            {cart.eligible_rewards && cart.eligible_rewards.length > 0 && (
+                <div className="rounded-xl overflow-hidden border border-orange-400 bg-white shadow-sm mt-2">
+                    <div className="p-3 bg-orange-500 text-white text-sm font-bold flex items-center gap-2">
                         <Ticket size={18} className="fill-white/20" />
                         Ưu đãi dành riêng cho bạn
                     </div>
 
-                    <GenericSlider
-                        items={promoProducts}
-                        renderItem={renderPromoItem}
-                        itemsPerView={1}
-                        gap={0}
-                        autoplay={true}
-                        autoplayInterval={5000}
-                        loop={true}
-                        showArrows={true}
-                        arrowClassName="scale-75 shadow-sm border-gray-200"
-                    />
+                    <div className="divide-y divide-gray-100">
+                        {cart.eligible_rewards.map((reward: any, idx: number) => (
+                            <div key={idx} className="p-4 flex gap-4 items-center bg-white h-full relative">
+                                <div className="w-20 h-24 bg-gray-100 rounded flex-shrink-0 overflow-hidden relative border border-gray-100">
+                                    {(reward.discount_type === 'percentage') && (
+                                        <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5">
+                                            -{reward.discount_value}%
+                                        </span>
+                                    )}
+                                    <img
+                                        src={reward.image || '/images/placeholder.png'}
+                                        alt={reward.name}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            e.currentTarget.src = 'https://placehold.co/100x100?text=No+Image';
+                                            e.currentTarget.onerror = null;
+                                        }}
+                                    />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-bold line-clamp-2 mb-1" title={reward.name}>{reward.name}</div>
+                                    <div className="text-xs text-orange-600 font-medium mb-2 italic">
+                                        Đủ điều kiện nhận {reward.discount_type === 'free' ? 'quà tặng 0đ' : 'ưu đãi giảm giá'}!
+                                    </div>
+                                    <div className="text-red-600 font-bold text-base">
+                                        {reward.discount_type === 'free' ? '0 đ' : formatPrice(reward.price - (reward.discount_type === 'fixed_amount' ? reward.discount_value : (reward.price * reward.discount_value / 100)))}
+                                        <span className="text-gray-400 line-through text-xs font-normal ml-1">
+                                            {formatPrice(reward.price)}
+                                        </span>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => handleAddPromoItem(reward)}
+                                    className="bg-orange-500 text-white text-xs px-3 py-2 rounded-full font-bold hover:bg-orange-600 transition-transform active:scale-95 whitespace-nowrap cursor-pointer z-10"
+                                >
+                                    Thêm ngay
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
         </div>

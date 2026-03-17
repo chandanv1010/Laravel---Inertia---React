@@ -99,8 +99,8 @@ class ProductResource extends JsonResource
                    'retail_price' => $this->retail_price !== null ? (float) $this->retail_price : 0,
                    'wholesale_price' => $this->wholesale_price !== null ? (float) $this->wholesale_price : 0,
                    'management_type' => $this->management_type,
-                   'track_inventory' => (bool) ($this->track_inventory ?? true),
-                   'allow_negative_stock' => (bool) ($this->allow_negative_stock ?? false),
+                   'track_inventory' => (bool) $this->track_inventory,
+                   'allow_negative_stock' => (bool) $this->allow_negative_stock,
                    'low_stock_alert' => (int) ($this->low_stock_alert ?? 0),
                    'expired_warning_days' => (int) ($this->expired_warning_days ?? 1),
                    'apply_tax' => (bool) ($this->apply_tax ?? false),
@@ -138,6 +138,7 @@ class ProductResource extends JsonResource
             'meta_title' => $language?->pivot->meta_title ?? null,
             'meta_keyword' => $language?->pivot->meta_keyword ?? null,
             'meta_description' => $language?->pivot->meta_description ?? null,
+            'price' => $this->retail_price !== null ? (float) $this->retail_price : 0,
             // Creators - chỉ trả về id và name
             'creator_id' => $this->whenLoaded('creators', fn() => $this->creators->id ?? null),
             'creator_name' => $this->whenLoaded('creators', fn() => $this->creators->name ?? null),

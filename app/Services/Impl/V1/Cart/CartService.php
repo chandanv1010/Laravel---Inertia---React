@@ -3,6 +3,7 @@
 namespace App\Services\Impl\V1\Cart;
 
 use App\Services\Interfaces\Cart\CartServiceInterface;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
 use App\Services\Interfaces\Product\ProductServiceInterface;
 use App\Services\Impl\V1\Promotion\PromotionPricingService;
@@ -43,6 +44,34 @@ class CartService implements CartServiceInterface
             $variant = $product->variants->where('id', $variantId)->first();
             if (!$variant) {
                 throw new Exception('Biến thể sản phẩm không tồn tại');
+            }
+        }
+
+        // --- Kiểm tra tồn kho (Inventory Check) ---
+        $trackInventory = (bool)($product->track_inventory ?? true);
+        $allowNegative = (bool)($product->allow_negative_stock ?? false);
+        
+        if ($trackInventory && !$allowNegative) {
+            $entity = $variant ?: $product;
+            $currentStock = 0;
+            
+            // Lấy stock quantity từ Resource logic (giả định Service đã load đủ relation)
+            if ($product->management_type === 'batch') {
+                $batches = $variant ? $variant->batches : $product->batches;
+                foreach ($batches as $batch) {
+                    $currentStock += $batch->warehouseStocks->sum('stock_quantity');
+                }
+            } else {
+                $stocks = $variant ? $variant->warehouseStocks : $product->warehouseStocks;
+                $currentStock = $stocks->sum('stock_quantity');
+            }
+
+            $currentInCart = isset($cart['items'][$productId . ($variantId ? '_' . $variantId : '')]) 
+                ? $cart['items'][$productId . ($variantId ? '_' . $variantId : '')]['quantity'] 
+                : 0;
+
+            if (($currentInCart + $quantity) > $currentStock) {
+                throw new Exception('Số lượng vượt quá tồn kho cho phép (Hiện còn: ' . $currentStock . ')');
             }
         }
 
@@ -221,7 +250,8 @@ class CartService implements CartServiceInterface
                 } catch (\Exception $e) {}
             }
         }
-
+        unset($item);
+        
         if ($hasUpdates) {
             Session::put($this->sessionKey, $cart);
         }
@@ -262,33 +292,200 @@ class CartService implements CartServiceInterface
     
     protected function save(array $cart): void
     {
+        // 1. Dọn dẹp các món quà tặng cũ (is_gift = true) để tính toán lại từ đầu
+        $realItems = array_filter($cart['items'], fn($item) => empty($item['is_gift']));
+        $cart['items'] = $realItems;
+
         $totalQuantity = 0;
         $totalRetailPrice = 0;
         $totalProductDiscount = 0;
         $subtotalAfterProductDiscount = 0;
 
+        $productIds = array_unique(array_column($cart['items'], 'product_id'));
+        $variantIds = array_unique(array_filter(array_column($cart['items'], 'variant_id')));
+        
+        $products = \App\Models\Product::whereIn('id', $productIds)->with('product_catalogues')->get()->keyBy('id');
+        $variants = !empty($variantIds) ? \App\Models\ProductVariant::whereIn('id', $variantIds)->get()->keyBy('id') : collect();
+
         foreach ($cart['items'] as &$item) {
-            $pricing = $this->promotionPricingService->calculateFinalPrice(
-                !empty($item['variant_id']) 
-                    ? \App\Models\ProductVariant::find($item['variant_id']) 
-                    : \App\Models\Product::find($item['product_id']),
-                $item['quantity']
-            );
+            $entity = !empty($item['variant_id']) ? ($variants[$item['variant_id']] ?? null) : ($products[$item['product_id']] ?? null);
+            
+            if (!$entity) continue;
+
+            $pricing = $this->promotionPricingService->calculateFinalPrice($entity, $item['quantity']);
 
             $item['prices'] = [
                 'retail' => (float)$pricing['original_price'],
-                'promo' => (float)$pricing['final_price'],
+                'promo' => (float)$pricing['final_price'], // Giá sau khi giảm giá sản phẩm trực tiếp
                 'final_unit' => (float)$pricing['final_price']
             ];
             $item['product_promotions'] = $pricing['applied_promotions'] ?? [];
             $item['price'] = (float)$pricing['final_price'];
             
+            // Đính kèm catalogue_ids để phục vụ matching BXGY sau này
+            $product = !empty($item['variant_id']) ? $entity->product : $entity;
+            $item['catalogue_ids'] = $product->product_catalogues->pluck('id')->toArray();
+
             $totalQuantity += $item['quantity'];
             $totalRetailPrice += ($pricing['original_price'] * $item['quantity']);
             $totalProductDiscount += ($pricing['discount_amount'] * $item['quantity']);
             $subtotalAfterProductDiscount += ($pricing['final_price'] * $item['quantity']);
         }
+        unset($item);
 
+        // 3. Xử lý Buy X Get Y Promotions
+        $buyXGetYPromotions = \App\Models\Promotion::where('publish', 2)
+            ->where('type', 'buy_x_get_y')
+            ->expiryStatus('active')
+            ->with(['buy_x_get_y_items'])
+            ->get();
+
+        $buyXGetYDiscounts = 0;
+        $appliedBuyXGetY = [];
+        $eligibleRewards = []; 
+
+        // Helper check match
+        $matchRule = function ($item, $rule) {
+            if ($rule->apply_type === 'product' && $item['product_id'] == $rule->product_id) return true;
+            if ($rule->apply_type === 'product_variant' && !empty($item['variant_id']) && $item['variant_id'] == $rule->product_variant_id) return true;
+            if ($rule->apply_type === 'product_catalogue' && in_array((int)$rule->product_catalogue_id, array_map('intval', $item['catalogue_ids'] ?? []))) return true;
+            return false;
+        };
+
+        foreach ($buyXGetYPromotions as $promo) {
+            $buyRules = $promo->buy_x_get_y_items->where('item_type', 'buy');
+            $getRules = $promo->buy_x_get_y_items->where('item_type', 'get');
+            if ($buyRules->isEmpty() || $getRules->isEmpty()) continue;
+
+            // 3.1. Tính tổng số lượng X (Sản phẩm Mua)
+            $totalBuyQty = 0;
+            foreach ($cart['items'] as $item) {
+                foreach ($buyRules as $rule) {
+                    if ($matchRule($item, $rule)) {
+                        if ($rule->min_order_value > 0 && ($item['prices']['retail'] * $item['quantity']) < $rule->min_order_value) continue;
+                        $totalBuyQty += $item['quantity'];
+                    }
+                }
+            }
+            if ($totalBuyQty <= 0) continue;
+
+            // 3.2. Tính số lượng Y được hưởng (Phần thưởng)
+            $ruleBuyQty = $buyRules->first()->quantity ?: 1;
+            $ruleGetQty = $getRules->first()->quantity ?: 1;
+            $numRewards = floor($totalBuyQty / $ruleBuyQty) * $ruleGetQty;
+            if ($numRewards <= 0) continue;
+
+            // 3.3. Áp dụng phần thưởng (Gifts hoặc Discounts)
+            foreach ($getRules as $getRule) {
+                if ($numRewards <= 0) break;
+
+                // TH1: MIỄN PHÍ (Quà tặng tự động)
+                if ($promo->discount_type === 'free') {
+                    // Fetch product info cho quà tặng nếu cần
+                    $giftProduct = $this->productService->show((int)$getRule->product_id);
+                    $giftVariant = !empty($getRule->product_variant_id) ? $giftProduct->variants->where('id', $getRule->product_variant_id)->first() : null;
+                    $entity = $giftVariant ?: $giftProduct;
+                    
+                    $name = $giftProduct->languages->where('language_id', config('app.language_id'))->first()?->pivot?->name ?? $giftProduct->name;
+                    if ($giftVariant) $name .= ' - ' . ($giftVariant->name ?: 'Biến thể');
+
+                    // Tạo một row_id đặc thù cho quà tặng của Promo này
+                    $giftRowId = 'gift_' . $promo->id . '_' . $getRule->id;
+                    
+                    $cart['items'][$giftRowId] = [
+                        'row_id' => $giftRowId,
+                        'product_id' => $getRule->product_id,
+                        'variant_id' => $getRule->product_variant_id,
+                        'name' => $name,
+                        'image' => $entity->image ?? $giftProduct->image ?? '',
+                        'price' => 0, // Miễn phí
+                        'original_price' => (float)($entity->retail_price ?? 0),
+                        'quantity' => $numRewards,
+                        'is_gift' => true,
+                        'promo_id' => $promo->id,
+                        'promo_name' => $promo->name,
+                        'options' => [], // Có thể bổ sung nếu cần
+                        'product_promotions' => [[
+                            'id' => $promo->id,
+                            'name' => $promo->name,
+                            'type' => 'buy_x_get_y',
+                            'discount' => (float)($entity->retail_price ?? 0) * $numRewards,
+                            'apply_qty' => $numRewards
+                        ]]
+                    ];
+                    
+                    $buyXGetYDiscounts += ($cart['items'][$giftRowId]['original_price'] * $numRewards);
+                    $numRewards = 0; // Hết quota thưởng cho rule này
+                } 
+                // TH2: GIẢM GIÁ (Người dùng phải chọn)
+                else {
+                    $foundInCart = false;
+                    foreach ($cart['items'] as $rowId => &$item) {
+                        if ($matchRule($item, $getRule)) {
+                            $foundInCart = true;
+                            $applyQty = min($item['quantity'], $numRewards);
+                            
+                            $canCombine = (bool)$promo->combine_with_product_discount;
+                            $basePrice = $canCombine ? $item['prices']['promo'] : $item['prices']['retail'];
+                            
+                            $discountPerUnit = 0;
+                            if ($promo->discount_type === 'percentage') $discountPerUnit = $basePrice * ($promo->discount_value / 100);
+                            elseif ($promo->discount_type === 'fixed_amount') $discountPerUnit = min($promo->discount_value, $basePrice);
+
+                            if (!$canCombine) {
+                                $alreadyDiscounted = $item['prices']['retail'] - $item['prices']['promo'];
+                                $discountPerUnit = max(0, $discountPerUnit - $alreadyDiscounted);
+                            }
+
+                            $itemDiscount = $discountPerUnit * $applyQty;
+                            if ($itemDiscount > 0) {
+                                $item['price'] -= ($itemDiscount / $item['quantity']);
+                                $item['product_promotions'][] = [
+                                    'id' => $promo->id, 'name' => $promo->name, 'type' => 'buy_x_get_y',
+                                    'discount' => $itemDiscount, 'apply_qty' => $applyQty
+                                ];
+                                $buyXGetYDiscounts += $itemDiscount;
+                            }
+                            $numRewards -= $applyQty;
+                        }
+                    }
+                    unset($item);
+
+                    // Nếu chưa có trong giỏ, đưa vào gợi ý
+                    if ($numRewards > 0) {
+                        $rewardProduct = $this->productService->show((int)$getRule->product_id);
+                        $eligibleRewards[] = [
+                            'promo_id' => $promo->id, 'promo_name' => $promo->name,
+                            'product' => $rewardProduct, 'variant_id' => $getRule->product_variant_id,
+                            'discount_type' => $promo->discount_type, 'discount_value' => $promo->discount_value,
+                            'max_reward_qty' => $numRewards
+                        ];
+                    }
+                }
+            }
+        }
+
+        // 4. Tính toán lại tổng cộng sau BXGY
+        $totalQuantity = 0;
+        $totalRetailPrice = 0;
+        $totalProductDiscount = 0;
+        $subtotalAfterBXGY = 0;
+
+        foreach ($cart['items'] as $item) {
+            $totalQuantity += $item['quantity'];
+            if (!empty($item['is_gift'])) {
+                $totalRetailPrice += ($item['original_price'] * $item['quantity']);
+            } else {
+                $totalRetailPrice += ($item['prices']['retail'] * $item['quantity']);
+                $totalProductDiscount += ($item['prices']['retail'] - $item['prices']['promo']) * $item['quantity'];
+            }
+            $subtotalAfterBXGY += ($item['price'] * $item['quantity']);
+        }
+
+        $cart['eligible_rewards'] = $eligibleRewards;
+        $subtotalAfterBuyXGetY = $subtotalAfterBXGY;
+
+        // 5. Order Promotions (giảm giá trên tổng đơn)
         $orderPromotions = $this->promotionPricingService->getActiveOrderPromotions();
         $combinableList = $orderPromotions->filter(fn($p) => $p->combine_with_product_discount);
         
@@ -298,7 +495,7 @@ class CartService implements CartServiceInterface
         $standaloneBestPromo = null;
 
         foreach ($combinableList as $promo) {
-            $discount = $this->promotionPricingService->calculateOrderPromotionDiscount($subtotalAfterProductDiscount, $promo);
+            $discount = $this->promotionPricingService->calculateOrderPromotionDiscount($subtotalAfterBuyXGetY, $promo);
             if ($discount <= 0) continue;
 
             if ($promo->combine_with_order_discount) {
@@ -312,6 +509,9 @@ class CartService implements CartServiceInterface
             }
         }
         
+        $combinableOrderDiscount = 0;
+        $combinableOrderPromos = [];
+
         if ($stackableDiscount >= $standaloneBestDiscount && $stackableDiscount > 0) {
             $combinableOrderDiscount = $stackableDiscount;
             $combinableOrderPromos = $stackablePromos;
@@ -320,7 +520,7 @@ class CartService implements CartServiceInterface
             $combinableOrderPromos = $standaloneBestPromo ? [$standaloneBestPromo] : [];
         }
         
-        $totalBenefit1 = $totalProductDiscount + $combinableOrderDiscount;
+        $totalBenefit1 = $totalProductDiscount + $combinableOrderDiscount + $buyXGetYDiscounts;
 
         $bestSingleOrderDiscount = 0;
         $bestSingleOrderPromo = null;
@@ -332,38 +532,62 @@ class CartService implements CartServiceInterface
             }
         }
         
-        $appliedOrderPromos = [];
-        $orderDiscountTotal = 0;
+        $voucherDiscount = 0;
+        if (isset($cart['voucher_info'])) {
+            $voucherService = app(\App\Services\Impl\V1\Voucher\VoucherService::class);
+            $voucherDiscount = $voucherService->calculateVoucherDiscount(
+                $cart['voucher_info'],
+                $cart['items'],
+                $subtotalAfterBuyXGetY - $combinableOrderDiscount // Apply voucher after product and order promos
+            );
+        }
+
+        $finalTotal = $subtotalAfterBuyXGetY;
 
         if ($totalBenefit1 >= $bestSingleOrderDiscount) {
-            $orderDiscountTotal = $combinableOrderDiscount;
-            $appliedOrderPromos = $combinableOrderPromos;
+            // Use combinable discounts
+            $finalTotal -= $combinableOrderDiscount;
         } else {
-            $orderDiscountTotal = $bestSingleOrderDiscount;
-            $appliedOrderPromos = [$bestSingleOrderPromo];
+            // Use best single order discount, reset product/BXGY discounts
+            $combinableOrderDiscount = $bestSingleOrderDiscount;
+            $combinableOrderPromos = [$bestSingleOrderPromo];
             foreach ($cart['items'] as &$item) {
                 $item['price'] = $item['prices']['retail'];
                 $item['prices']['final_unit'] = $item['prices']['retail'];
                 $item['product_promotions'] = [];
             }
+            unset($item);
             $totalProductDiscount = 0;
-            $subtotalAfterProductDiscount = $totalRetailPrice;
+            $buyXGetYDiscounts = 0;
+            $appliedBuyXGetY = [];
+            $subtotalAfterBuyXGetY = $totalRetailPrice; // Recalculate subtotal if product/BXGY discounts are reset
+            $finalTotal = $subtotalAfterBuyXGetY - $combinableOrderDiscount;
         }
+
+        $finalTotal -= $voucherDiscount;
 
         $cart['summary'] = [
             'total_quantity' => $totalQuantity,
             'total_retail' => $totalRetailPrice,
             'total_product_discount' => $totalProductDiscount,
-            'subtotal' => $subtotalAfterProductDiscount,
-            'order_discount' => ['total' => $orderDiscountTotal, 'applied_promos' => $appliedOrderPromos],
-            'voucher_discount' => 0,
-            'final_total' => max(0, $subtotalAfterProductDiscount - $orderDiscountTotal)
+            'buy_x_get_y_discount' => [
+                'total' => $buyXGetYDiscounts,
+                'applied_promos' => $appliedBuyXGetY
+            ],
+            'subtotal' => $subtotalAfterBuyXGetY,
+            'order_discount' => [
+                'total' => $combinableOrderDiscount,
+                'applied_promos' => $combinableOrderPromos
+            ],
+            'voucher_discount' => $voucherDiscount,
+            'final_total' => $finalTotal
         ];
 
+        // Sync back flat properties
         $cart['total_quantity'] = $totalQuantity;
-        $cart['total_price'] = $subtotalAfterProductDiscount;
-        $cart['discount_total'] = $orderDiscountTotal;
-        $cart['final_total'] = $cart['summary']['final_total'];
+        $cart['total_price'] = $subtotalAfterBXGY; 
+        $cart['discount_total'] = $totalProductDiscount + $buyXGetYDiscounts + $combinableOrderDiscount + $voucherDiscount;
+        $cart['final_total'] = $finalTotal;
 
         Session::put($this->sessionKey, $cart);
     }

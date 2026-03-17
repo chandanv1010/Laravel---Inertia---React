@@ -184,10 +184,11 @@ export function WarehouseStockManager({
     }, [showAllWarehouses, warehouses, warehouseStocks])
 
     const handleStockChange = (index: number, quantity: number | undefined) => {
+        if (index < 0 || index >= stocks.length) return
         const newStocks = [...stocks]
         newStocks[index] = {
             ...newStocks[index],
-            stock_quantity: quantity || 0
+            stock_quantity: quantity ?? 0
         }
         setStocks(newStocks)
         onChangeRef.current(newStocks)
@@ -291,15 +292,11 @@ export function WarehouseStockManager({
                             // For variant, reload variant prop
                             router.reload({
                                 only: ['variant'],
-                                preserveState: true,
-                                preserveScroll: true,
                             })
                         } else {
                             // For product, reload record prop
                             router.reload({
                                 only: ['record'],
-                                preserveState: true,
-                                preserveScroll: true,
                             })
                         }
                     }, 200)
@@ -319,7 +316,9 @@ export function WarehouseStockManager({
             }
         } else {
             // For create mode or non-adjust mode, just update UI
-            handleStockChange(adjustIndex, n)
+            if (adjustIndex >= 0) {
+                handleStockChange(adjustIndex, n)
+            }
             setOpenAdjust(false)
         }
     }
@@ -447,11 +446,9 @@ export function WarehouseStockManager({
                 setOpenTransfer(false)
 
                 // Reload để cập nhật warehouse stocks
-                router.reload({
-                    only: isVariant ? ['variant'] : ['record'],
-                    preserveState: true,
-                    preserveScroll: true,
-                    onSuccess: () => {
+                    router.reload({
+                        only: isVariant ? ['variant'] : ['record'],
+                        onSuccess: () => {
                         // Trigger stock history refresh after reload completes
                         console.log('Triggering stock history refresh after transfer reload')
                         setTimeout(() => {
@@ -756,8 +753,6 @@ export function WarehouseStockManager({
                         // Reload page to refresh warehouse stocks if needed
                         router.reload({
                             only: isVariant ? ['variant'] : ['record'],
-                            preserveState: true,
-                            preserveScroll: true,
                         })
                         // Also refresh batch list in parent
                         onBatchRefresh?.()

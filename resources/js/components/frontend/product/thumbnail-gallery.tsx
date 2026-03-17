@@ -169,7 +169,7 @@ export default function ThumbnailGallery({
                     modules={[FreeMode, Navigation, Thumbs, EffectFade]}
                     effect={'slide'}
                     speed={500}
-                    className="h-full w-full product-main-swiper"
+                    className="h-full w-full product-main-swiper !max-h-[600px]"
                 >
                     {slides.map((slide) => (
                         <SwiperSlide key={`main-${slide.id}`} className="bg-white">
@@ -204,7 +204,7 @@ export default function ThumbnailGallery({
                                     <img
                                         src={slide.src}
                                         alt={productName}
-                                        className="w-full h-auto"
+                                        className="w-full h-auto max-h-[600px] object-contain mx-auto block"
                                         style={{ objectFit: objectFitStyle }}
                                     />
                                 )}

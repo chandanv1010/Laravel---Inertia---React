@@ -21,15 +21,18 @@ class ProductController extends Controller
     protected ProductServiceInterface $productService;
     protected WidgetServiceInterface $widgetService;
     protected VoucherServiceInterface $voucherService;
+    protected \App\Services\Impl\V1\Promotion\PromotionPricingService $promotionPricingService;
 
     public function __construct(
         ProductServiceInterface $productService,
         WidgetServiceInterface $widgetService,
-        VoucherServiceInterface $voucherService
+        VoucherServiceInterface $voucherService,
+        \App\Services\Impl\V1\Promotion\PromotionPricingService $promotionPricingService
     ) {
         $this->productService = $productService;
         $this->widgetService = $widgetService;
         $this->voucherService = $voucherService;
+        $this->promotionPricingService = $promotionPricingService;
     }
 
     /**
@@ -89,13 +92,21 @@ class ProductController extends Controller
         $breadcrumbs = BreadcrumbHelper::fromItem($product, $catalogue, $languageId);
         $seo = SeoHelper::fromModel($product, $languageId);
 
+        // Preload all promotion data for the main product and related products
+        $allProductIds = array_merge([$productId], collect($relatedProducts)->pluck('id')->toArray());
+        $this->promotionPricingService->preloadForProducts($allProductIds);
+
+        // Fetch Buy X Get Y promotions for the slider
+        $buyXGetYPromotions = $this->promotionPricingService->getBuyXGetYForProduct($product);
+
         return Inertia::render('frontend/product/detail/index', [
             'product' => new ProductResource($product), // Wrap with Resource to flatten data
-            'relatedProducts' => $relatedProducts,
+            'relatedProducts' => ProductResource::collection($relatedProducts),
             'promotionalWidget' => $promotionalWidget,
             'suggestedProducts' => $suggestedProducts,
             'vouchers' => $vouchers,
             'freeship_voucher' => $freeshipVoucher,
+            'buy_x_get_y' => $buyXGetYPromotions, // Pass as buy_x_get_y
             'breadcrumbs' => $breadcrumbs,
             'seo' => $seo,
             'catalogue' => $catalogue,

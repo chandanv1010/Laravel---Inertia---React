@@ -161,7 +161,7 @@ export function VariantsSection({
                                             target.closest('button') ||
                                             target.closest('input') ||
                                             target.closest('textarea') ||
-                                            window.getSelection()?.toString().length > 0
+                                            (window.getSelection()?.toString()?.length ?? 0) > 0
                                         ) {
                                             return
                                         }
@@ -174,7 +174,7 @@ export function VariantsSection({
                                             target.closest('button') ||
                                             target.closest('input') ||
                                             target.closest('textarea') ||
-                                            window.getSelection()?.toString().length > 0
+                                            (window.getSelection()?.toString()?.length ?? 0) > 0
                                         ) {
                                             return
                                         }
@@ -226,7 +226,7 @@ export function VariantsSection({
                                         >
                                             <NumberInput
                                                 value={variant.cost_price ?? 0}
-                                                onValueChange={(v) => updateVariant(index, 'cost_price', v)}
+                                                onValueChange={(v) => updateVariant(index, 'cost_price', v ?? 0)}
                                                 className="h-8 font-normal"
                                                 placeholder="0"
                                             />
@@ -294,8 +294,8 @@ export function VariantsSection({
                                                                     className="cursor-help"
                                                                 >
                                                                     <NumberInput
-                                                                        value={variant.stock_quantity}
-                                                                        onValueChange={(v) => updateVariant(index, 'stock_quantity', v)}
+                                                                        value={variant.stock_quantity ?? 0}
+                                                                        onValueChange={(v) => updateVariant(index, 'stock_quantity', v ?? 0)}
                                                                         className="h-8 font-normal"
                                                                         placeholder="0"
                                                                     />
@@ -331,8 +331,8 @@ export function VariantsSection({
                                                     onMouseMove={(e) => e.stopPropagation()}
                                                 >
                                                     <NumberInput
-                                                        value={variant.stock_quantity}
-                                                        onValueChange={(v) => updateVariant(index, 'stock_quantity', v)}
+                                                        value={variant.stock_quantity ?? 0}
+                                                        onValueChange={(v) => updateVariant(index, 'stock_quantity', v ?? 0)}
                                                         className="h-8 font-normal"
                                                         placeholder="0"
                                                     />

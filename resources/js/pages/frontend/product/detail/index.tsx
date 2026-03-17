@@ -8,6 +8,7 @@ import ProductDescription from '@/components/frontend/product/product-descriptio
 import ProductPriceDetail from '@/components/frontend/product/product-price-detail';
 import VoucherList from '@/components/frontend/product/product-voucher-list';
 import ProductVariantSelector from '@/components/frontend/product/product-variant-selector';
+import BuyXGetYSlider from '@/components/frontend/product/buy-x-get-y-slider';
 
 // Interfaces
 interface Product {
@@ -35,7 +36,9 @@ interface Product {
         description?: string;
         content?: string;
     };
-    attribute_catalogues?: any[]; // Added for variant selector
+    attribute_catalogues?: any[];
+    track_inventory?: boolean;
+    allow_negative_stock?: boolean;
 }
 
 interface ProductDetailProps {
@@ -49,6 +52,7 @@ interface ProductDetailProps {
     product_catalogue_breadcrumb?: any[]; // Added based on instruction
     vouchers?: any[];
     freeship_voucher?: any;
+    buy_x_get_y?: any[];
 }
 
 export default function ProductDetail({
@@ -60,7 +64,8 @@ export default function ProductDetail({
     seo,
     catalogue,
     vouchers = [],
-    freeship_voucher
+    freeship_voucher,
+    buy_x_get_y = []
 }: ProductDetailProps) {
     // State for selected variant, stock status, and quantity
     const [selectedVariant, setSelectedVariant] = useState<any | null>(null);
@@ -154,49 +159,56 @@ export default function ProductDetail({
                         </div>
 
                         {/* Right: Info (6 cols - 50%) */}
-                        <div className="lg:col-span-6">
-                            {/* Product Header (Name + Rating + Share) */}
-                            <ProductHeader
-                                product={{
-                                    name: product.name,
-                                    reviews_count: product.reviews_count,
-                                    average_rating: product.average_rating
-                                }}
-                            />
-
-                            {/* Product Description */}
-                            <ProductDescription content={product.description} />
-
-                            {/* Price Detail */}
-                            <ProductPriceDetail
-                                product={product}
-                                selectedVariant={selectedVariant}
-                                quantity={quantity}
-                                freeship_voucher={freeship_voucher}
-                            />
-
-                            {/* Variant Selector */}
-                            {product.attribute_catalogues && product.attribute_catalogues.length > 0 && (
-                                <ProductVariantSelector
-                                    attributeCatalogues={product.attribute_catalogues}
-                                    variants={product.variants || []}
-                                    onVariantChange={setSelectedVariant}
-                                    onStockStatusChange={setAllOutOfStock}
+                        <div className="lg:col-span-6 flex flex-col gap-6">
+                            <div>
+                                {/* Product Header (Name + Rating + Share) */}
+                                <ProductHeader
+                                    product={{
+                                        name: product.name,
+                                        reviews_count: product.reviews_count,
+                                        average_rating: product.average_rating
+                                    }}
                                 />
-                            )}
 
-                            {/* Voucher List */}
-                            <VoucherList vouchers={vouchers} />
+                                {/* Product Description */}
+                                <ProductDescription content={product.description} />
 
-                            {/* Product Info (Variants, Quantity, Add to Cart) */}
-                            <ProductInfo
-                                product={product}
-                                catalogue={catalogue}
-                                selectedVariant={selectedVariant}
-                                allOutOfStock={allOutOfStock}
-                                quantity={quantity}
-                                onQuantityChange={setQuantity}
-                            />
+                                {/* Price Detail */}
+                                <ProductPriceDetail
+                                    product={product}
+                                    selectedVariant={selectedVariant}
+                                    quantity={quantity}
+                                    freeship_voucher={freeship_voucher}
+                                />
+
+                                {/* Variant Selector */}
+                                {product.attribute_catalogues && product.attribute_catalogues.length > 0 && (
+                                    <ProductVariantSelector
+                                        attributeCatalogues={product.attribute_catalogues}
+                                        variants={product.variants || []}
+                                        trackInventory={product.track_inventory}
+                                        allowNegative={product.allow_negative_stock}
+                                        onVariantChange={setSelectedVariant}
+                                        onStockStatusChange={setAllOutOfStock}
+                                    />
+                                )}
+
+                                {/* Voucher List */}
+                                <VoucherList vouchers={vouchers} />
+
+                                {/* Product Info (Variants, Quantity, Add to Cart) */}
+                                <ProductInfo
+                                    product={product}
+                                    catalogue={catalogue}
+                                    selectedVariant={selectedVariant}
+                                    allOutOfStock={allOutOfStock}
+                                    quantity={quantity}
+                                    onQuantityChange={setQuantity}
+                                />
+                            </div>
+
+                            {/* Buy X Get Y Slider - Suggestion box */}
+                            <BuyXGetYSlider promotions={buy_x_get_y} />
                         </div>
                     </div>
 
