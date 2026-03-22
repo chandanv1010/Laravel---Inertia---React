@@ -47,7 +47,7 @@ class UserCatalogueController extends BaseController{
         $this->authorize('modules', 'user_catalogue:index');
         
         $records = $this->service->paginate($request);
-        $users = $this->userService->setWith([])->paginate(new Request()->merge(['type' => 'all', 'sort' => 'name,asc']));
+        $users = $this->userService->setWith([])->paginate((new Request())->merge(['type' => 'all', 'sort' => 'name,asc']));
         return Inertia::render('backend/user/user_catalogue/index', [
             'records' => $records,
             'users' => $users,

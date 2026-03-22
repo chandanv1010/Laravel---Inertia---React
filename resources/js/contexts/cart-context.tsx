@@ -13,13 +13,14 @@ interface CartItem {
     original_price?: number;
     product_promotions?: any[];
     is_gift?: boolean;
+    promo_id?: number;
 }
 
 interface CartContextType {
     cartItems: CartItem[];
     cartCount: number;
     cartTotal: number;
-    addToCart: (productId: number, variantId: number | null, quantity: number) => Promise<any>;
+    addToCart: (productId: number, variantId: number | null, quantity: number, promoId?: number) => Promise<any>;
     removeFromCart: (rowId: string) => Promise<void>;
     updateQuantity: (rowId: string, quantity: number) => Promise<void>;
     clearCart: () => Promise<void>;
@@ -66,13 +67,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         refreshCart();
     }, []);
 
-    const addToCart = async (productId: number, variantId: number | null, quantity: number) => {
+    const addToCart = async (productId: number, variantId: number | null, quantity: number, promoId?: number) => {
         setIsLoading(true);
         try {
             const response = await axios.post('/cart/add', {
                 product_id: productId,
                 variant_id: variantId,
-                quantity: quantity
+                quantity: quantity,
+                promo_id: promoId
             });
 
             if (response.data.status === 'success') {
@@ -125,6 +127,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 const data = response.data.data;
                 setCartItems(Object.values(data.items));
                 setCartCount(data.total_quantity);
+                // ...
                 setCartTotal(data.total_price);
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);

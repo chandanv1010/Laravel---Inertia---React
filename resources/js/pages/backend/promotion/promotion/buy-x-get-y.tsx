@@ -32,15 +32,15 @@ interface BuyXGetYPromotion {
     buy_min_order_value?: number
     buy_condition_type: 'min_quantity' | 'min_order_value'
     buy_apply_type: 'product' | 'product_catalogue'
-    buy_product_ids?: number[]
+    buy_product_ids?: (string | number)[]
     buy_product_catalogue_ids?: number[]
-    buy_product_items?: Array<{ id: number; name: string; sku: string; image?: string }>
+    buy_product_items?: Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number }>
     buy_product_catalogue_items?: Array<{ id: number; name: string; image?: string }>
     get_quantity: number
     get_apply_type: 'product' | 'product_catalogue'
-    get_product_ids?: number[]
+    get_product_ids?: (string | number)[]
     get_product_catalogue_ids?: number[]
-    get_product_items?: Array<{ id: number; name: string; sku: string; image?: string }>
+    get_product_items?: Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number }>
     get_product_catalogue_items?: Array<{ id: number; name: string; image?: string }>
     max_apply_per_order?: number
     combine_with_order_discount: boolean
@@ -85,7 +85,7 @@ export default function BuyXGetY({
     const [buyApplyType, setBuyApplyType] = useState<'product' | 'product_catalogue'>(
         promotion?.buy_apply_type || 'product'
     )
-    const [buySelectedProducts, setBuySelectedProducts] = useState<Array<{ id: number; name: string; sku: string; image?: string }>>(
+    const [buySelectedProducts, setBuySelectedProducts] = useState<Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number }>>(
         promotion?.buy_product_items || []
     )
     const [buySelectedCatalogues, setBuySelectedCatalogues] = useState<Array<{ id: number; name: string; image?: string }>>(
@@ -99,7 +99,7 @@ export default function BuyXGetY({
     const [getApplyType, setGetApplyType] = useState<'product' | 'product_catalogue'>(
         promotion?.get_apply_type || 'product'
     )
-    const [getSelectedProducts, setGetSelectedProducts] = useState<Array<{ id: number; name: string; sku: string; image?: string }>>(
+    const [getSelectedProducts, setGetSelectedProducts] = useState<Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number }>>(
         promotion?.get_product_items || []
     )
     const [getSelectedCatalogues, setGetSelectedCatalogues] = useState<Array<{ id: number; name: string; image?: string }>>(
@@ -310,7 +310,7 @@ export default function BuyXGetY({
     }
 
 
-    const removeBuyProduct = (id: number) => {
+    const removeBuyProduct = (id: string | number) => {
         setBuySelectedProducts(prev => prev.filter(p => p.id !== id))
     }
 
@@ -318,7 +318,7 @@ export default function BuyXGetY({
         setBuySelectedCatalogues(prev => prev.filter(c => c.id !== id))
     }
 
-    const removeGetProduct = (id: number) => {
+    const removeGetProduct = (id: string | number) => {
         setGetSelectedProducts(prev => prev.filter(p => p.id !== id))
     }
 
@@ -326,7 +326,7 @@ export default function BuyXGetY({
         setGetSelectedCatalogues(prev => prev.filter(c => c.id !== id))
     }
 
-    const handleBuyProductsSelected = (products: Array<{ id: number; name: string; sku: string; image?: string }>) => {
+    const handleBuyProductsSelected = (products: Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number }>) => {
         setBuySelectedProducts(products)
         setShowBuyProductModal(false)
     }
@@ -336,7 +336,7 @@ export default function BuyXGetY({
         setShowBuyCategoryModal(false)
     }
 
-    const handleGetProductsSelected = (products: Array<{ id: number; name: string; sku: string; image?: string }>) => {
+    const handleGetProductsSelected = (products: Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number }>) => {
         setGetSelectedProducts(products)
         setShowGetProductModal(false)
     }
@@ -379,18 +379,18 @@ export default function BuyXGetY({
                             buy_min_order_value: buyConditionType === 'min_order_value' ? buyMinOrderValue : null,
                             buy_apply_type: buyApplyType,
                             buy_product_ids: buyApplyType === 'product' ? buySelectedProducts.map(p => {
-                                // Nếu có productId và id === productId thì là product không có variant
-                                // Nếu có productId và id !== productId thì là variant
-                                // Backend sẽ tự phân biệt
-                                return p.id;
+                                const idStr = String(p.id);
+                                if (idStr.startsWith('p') || idStr.startsWith('v')) return idStr;
+                                return (p.id === p.productId ? 'p' : 'v') + p.id;
                             }) : [],
                             buy_product_catalogue_ids: buyApplyType === 'product_catalogue' ? buySelectedCatalogues.map(c => c.id) : [],
                             // Get Y data
                             get_quantity: getQuantity,
                             get_apply_type: getApplyType,
                             get_product_ids: getApplyType === 'product' ? getSelectedProducts.map(p => {
-                                // Tương tự như buy_product_ids
-                                return p.id;
+                                const idStr = String(p.id);
+                                if (idStr.startsWith('p') || idStr.startsWith('v')) return idStr;
+                                return (p.id === p.productId ? 'p' : 'v') + p.id;
                             }) : [],
                             get_product_catalogue_ids: getApplyType === 'product_catalogue' ? getSelectedCatalogues.map(c => c.id) : [],
                             // Discount

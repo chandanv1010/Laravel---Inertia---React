@@ -162,30 +162,15 @@ class PromotionController extends BaseController
                 ->map(function($row) {
                     if ($row->product_variant_id) {
                         $variant = \App\Models\ProductVariant::with('product')->find($row->product_variant_id);
-                        if ($variant) {
+                        $product = $variant ? $variant->product : \App\Models\Product::find($row->product_id);
+                        if ($variant || $product) {
                             return [
-                                'id' => $variant->id,
-                                'name' => $variant->name ?? ($variant->product ? $variant->product->name : ''),
-                                'sku' => $variant->sku,
-                                'price' => $variant->retail_price ?? $variant->wholesale_price ?? 0,
-                                'image' => ($variant->product && isset($variant->product->album) && is_array($variant->product->album) && count($variant->product->album) > 0) 
-                                    ? $variant->product->album[0] 
-                                    : null,
-                                'productId' => $variant->product_id,
-                            ];
-                        }
-                    } elseif ($row->product_id) {
-                        $product = \App\Models\Product::find($row->product_id);
-                        if ($product) {
-                            return [
-                                'id' => $product->id,
-                                'name' => $product->current_language->name ?? $product->name ?? '',
-                                'sku' => $product->sku ?? '',
-                                'price' => $product->retail_price ?? $product->wholesale_price ?? 0,
-                                'image' => (isset($product->album) && is_array($product->album) && count($product->album) > 0) 
-                                    ? $product->album[0] 
-                                    : null,
-                                'productId' => $product->id,
+                                'id' => ($variant ? 'v' . $variant->id : 'p' . $product->id),
+                                'name' => $variant ? ($variant->name ?? ($product ? $product->name : '')) : ($product->current_language->name ?? $product->name ?? ''),
+                                'sku' => $variant ? $variant->sku : ($product->sku ?? ''),
+                                'price' => $variant ? ($variant->retail_price ?? $variant->wholesale_price ?? 0) : ($product->retail_price ?? $product->wholesale_price ?? 0),
+                                'image' => $variant ? (($product && isset($product->album) && is_array($product->album) && count($product->album) > 0) ? $product->album[0] : null) : ((isset($product->album) && is_array($product->album) && count($product->album) > 0) ? $product->album[0] : null),
+                                'productId' => $product ? $product->id : null,
                             ];
                         }
                     }
@@ -254,16 +239,18 @@ class PromotionController extends BaseController
                 $promotionData['buy_apply_type'] = $firstBuyItem->apply_type === 'product_catalogue' ? 'product_catalogue' : 'product';
 
                 if ($firstBuyItem->apply_type === 'product' || $firstBuyItem->apply_type === 'product_variant') {
-                    $buyProductIds = $buyItems->where('apply_type', 'product')->pluck('product_id')->filter()->toArray();
-                    $buyVariantIds = $buyItems->where('apply_type', 'product_variant')->pluck('product_variant_id')->filter()->toArray();
-                    
-                    $allIds = array_merge($buyProductIds, $buyVariantIds);
-                    $promotionData['buy_product_ids'] = $allIds;
+                    $buyProductIdsRaw = $buyItems->where('apply_type', 'product')->pluck('product_id')->filter()->toArray();
+                    $buyVariantIdsRaw = $buyItems->where('apply_type', 'product_variant')->pluck('product_variant_id')->filter()->toArray();
+
+                    $promotionData['buy_product_ids'] = array_merge(
+                        array_map(fn($id) => 'p' . $id, $buyProductIdsRaw),
+                        array_map(fn($id) => 'v' . $id, $buyVariantIdsRaw)
+                    );
                     
                     $productItems = [];
                     
-                    if (!empty($buyProductIds)) {
-                        $products = \App\Models\Product::with(['current_languages', 'languages'])->whereIn('id', $buyProductIds)->get();
+                    if (!empty($buyProductIdsRaw)) {
+                        $products = \App\Models\Product::with(['current_languages', 'languages'])->whereIn('id', $buyProductIdsRaw)->get();
                         foreach ($products as $product) {
                             $productName = '';
                             if ($product->current_languages->isNotEmpty()) {
@@ -275,18 +262,19 @@ class PromotionController extends BaseController
                             $productName = $productName ?: ($product->name ?? '');
 
                             $productItems[] = [
-                                'id' => $product->id,
+                                'id' => 'p' . $product->id,
                                 'name' => $productName,
                                 'sku' => $product->sku ?? '',
                                 'image' => (isset($product->album) && is_array($product->album) && count($product->album) > 0) 
                                     ? $product->album[0] 
                                     : null,
+                                'productId' => $product->id,
                             ];
                         }
                     }
                     
-                    if (!empty($buyVariantIds)) {
-                        $variants = \App\Models\ProductVariant::with(['product.current_languages', 'product.languages'])->whereIn('id', $buyVariantIds)->get();
+                    if (!empty($buyVariantIdsRaw)) {
+                        $variants = \App\Models\ProductVariant::with(['product.current_languages', 'product.languages'])->whereIn('id', $buyVariantIdsRaw)->get();
                         foreach ($variants as $variant) {
                             $productName = '';
                             if ($variant->product) {
@@ -301,12 +289,13 @@ class PromotionController extends BaseController
                             $displayName = $variant->name ?: $productName;
 
                             $productItems[] = [
-                                'id' => $variant->id,
+                                'id' => 'v' . $variant->id,
                                 'name' => $displayName,
                                 'sku' => $variant->sku,
                                 'image' => ($variant->product && isset($variant->product->album) && is_array($variant->product->album) && count($variant->product->album) > 0) 
                                     ? $variant->product->album[0] 
                                     : null,
+                                'productId' => $variant->product_id,
                             ];
                         }
                     }
@@ -361,16 +350,18 @@ class PromotionController extends BaseController
                 $promotionData['get_apply_type'] = $firstGetItem->apply_type === 'product_catalogue' ? 'product_catalogue' : 'product';
 
                 if ($firstGetItem->apply_type === 'product' || $firstGetItem->apply_type === 'product_variant') {
-                    $getProductIds = $getItems->where('apply_type', 'product')->pluck('product_id')->filter()->toArray();
-                    $getVariantIds = $getItems->where('apply_type', 'product_variant')->pluck('product_variant_id')->filter()->toArray();
-                    
-                    $allIds = array_merge($getProductIds, $getVariantIds);
-                    $promotionData['get_product_ids'] = $allIds;
+                    $getProductIdsRaw = $getItems->where('apply_type', 'product')->pluck('product_id')->filter()->toArray();
+                    $getVariantIdsRaw = $getItems->where('apply_type', 'product_variant')->pluck('product_variant_id')->filter()->toArray();
+
+                    $promotionData['get_product_ids'] = array_merge(
+                        array_map(fn($id) => 'p' . $id, $getProductIdsRaw),
+                        array_map(fn($id) => 'v' . $id, $getVariantIdsRaw)
+                    );
                     
                     $productItems = [];
                     
-                    if (!empty($getProductIds)) {
-                        $products = \App\Models\Product::with(['current_languages', 'languages'])->whereIn('id', $getProductIds)->get();
+                    if (!empty($getProductIdsRaw)) {
+                        $products = \App\Models\Product::with(['current_languages', 'languages'])->whereIn('id', $getProductIdsRaw)->get();
                         foreach ($products as $product) {
                             $productName = '';
                             if ($product->current_languages->isNotEmpty()) {
@@ -382,18 +373,19 @@ class PromotionController extends BaseController
                             $productName = $productName ?: ($product->name ?? '');
 
                             $productItems[] = [
-                                'id' => $product->id,
+                                'id' => 'p' . $product->id,
                                 'name' => $productName,
                                 'sku' => $product->sku ?? '',
                                 'image' => (isset($product->album) && is_array($product->album) && count($product->album) > 0) 
                                     ? $product->album[0] 
                                     : null,
+                                'productId' => $product->id,
                             ];
                         }
                     }
                     
-                    if (!empty($getVariantIds)) {
-                        $variants = \App\Models\ProductVariant::with(['product.current_languages', 'product.languages'])->whereIn('id', $getVariantIds)->get();
+                    if (!empty($getVariantIdsRaw)) {
+                        $variants = \App\Models\ProductVariant::with(['product.current_languages', 'product.languages'])->whereIn('id', $getVariantIdsRaw)->get();
                         foreach ($variants as $variant) {
                             $productName = '';
                             if ($variant->product) {
@@ -408,12 +400,13 @@ class PromotionController extends BaseController
                             $displayName = $variant->name ?: $productName;
 
                             $productItems[] = [
-                                'id' => $variant->id,
+                                'id' => 'v' . $variant->id,
                                 'name' => $displayName,
                                 'sku' => $variant->sku,
                                 'image' => ($variant->product && isset($variant->product->album) && is_array($variant->product->album) && count($variant->product->album) > 0) 
                                     ? $variant->product->album[0] 
                                     : null,
+                                'productId' => $variant->product_id,
                             ];
                         }
                     }

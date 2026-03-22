@@ -187,11 +187,6 @@ class PromotionService extends BaseCacheService implements PromotionServiceInter
                 $productIds = $this->request->input('product_ids', []);
                 
                 if ($this->model->apply_source === 'product_variant') {
-                    // Xử lý sync vào bảng promotion_product_variant
-                    // Logic: 
-                    // - Nếu có variant: lưu product_variant_id và product_id (lấy từ variant để dễ query)
-                    // - Nếu không có variant: lưu product_id và product_variant_id = null
-                    
                     // Xóa tất cả records cũ
                     \Illuminate\Support\Facades\DB::table('promotion_product_variant')
                         ->where('promotion_id', $this->model->id)
@@ -199,28 +194,47 @@ class PromotionService extends BaseCacheService implements PromotionServiceInter
                     
                     $insertData = [];
                     
-                    // Xử lý variants: lưu product_variant_id và product_id (lấy từ variant)
+                    // Xử lý variants
                     foreach ($productVariantIds as $variantId) {
-                        $variant = \App\Models\ProductVariant::find($variantId);
+                        $actualId = $variantId;
+                        if (is_string($variantId)) {
+                            if (str_starts_with($variantId, 'v')) {
+                                $actualId = (int) substr($variantId, 1);
+                            } elseif (str_starts_with($variantId, 'p')) {
+                                continue;
+                            }
+                        }
+
+                        $variant = \App\Models\ProductVariant::find($actualId);
                         if ($variant) {
                             $insertData[] = [
                                 'promotion_id' => $this->model->id,
-                                'product_variant_id' => $variantId,
-                                'product_id' => $variant->product_id, // Lưu product_id từ variant để dễ query
+                                'product_variant_id' => $actualId,
+                                'product_id' => $variant->product_id,
                                 'created_at' => now(),
                                 'updated_at' => now(),
                             ];
                         }
                     }
                     
-                    // Xử lý products không có variant: lưu product_id và product_variant_id = null
+                    // Xử lý products
                     foreach ($productIds as $productId) {
-                        // Kiểm tra xem product này có variant không (chỉ lưu nếu không có variant)
-                        $hasVariants = \App\Models\ProductVariant::where('product_id', $productId)->exists();
-                        if (!$hasVariants) {
+                        $actualId = $productId;
+                        $isForcedProduct = false;
+                        if (is_string($productId)) {
+                            if (str_starts_with($productId, 'p')) {
+                                $actualId = (int) substr($productId, 1);
+                                $isForcedProduct = true;
+                            } elseif (str_starts_with($productId, 'v')) {
+                                continue;
+                            }
+                        }
+
+                        $hasVariants = \App\Models\ProductVariant::where('product_id', $actualId)->exists();
+                        if (!$hasVariants || $isForcedProduct) {
                             $insertData[] = [
                                 'promotion_id' => $this->model->id,
-                                'product_id' => $productId,
+                                'product_id' => $actualId,
                                 'product_variant_id' => null,
                                 'created_at' => now(),
                                 'updated_at' => now(),
@@ -228,225 +242,216 @@ class PromotionService extends BaseCacheService implements PromotionServiceInter
                         }
                     }
                     
-                    // Insert tất cả records mới (batch insert để tối ưu)
                     if (!empty($insertData)) {
                         \Illuminate\Support\Facades\DB::table('promotion_product_variant')->insert($insertData);
                     }
                 } else {
-                    // Nếu không phải product_variant, detach tất cả
                     \Illuminate\Support\Facades\DB::table('promotion_product_variant')
                         ->where('promotion_id', $this->model->id)
                         ->delete();
                 }
 
-                // Sync product catalogues based on apply_source
                 $productCatalogueIds = $this->request->input('product_catalogue_ids', []);
                 if ($this->model->apply_source === 'product_catalogue') {
                     $this->model->product_catalogues()->sync($productCatalogueIds);
                 } else {
                     $this->model->product_catalogues()->detach();
                 }
-            } else {
-                // Nếu không phải product_discount, detach tất cả product relationships
-                \Illuminate\Support\Facades\DB::table('promotion_product_variant')
+            }
+
+            // Xử lý buy_x_get_y type
+            if ($this->model->type === 'buy_x_get_y') {
+                \Illuminate\Support\Facades\DB::table('promotion_buy_x_get_y_items')
                     ->where('promotion_id', $this->model->id)
                     ->delete();
-                $this->model->product_catalogues()->detach();
-            }
-        }
 
-        // Xử lý buy_x_get_y type
-        if ($this->model->type === 'buy_x_get_y') {
-            // Xóa tất cả records cũ
-            \Illuminate\Support\Facades\DB::table('promotion_buy_x_get_y_items')
-                ->where('promotion_id', $this->model->id)
-                ->delete();
-
-            $insertData = [];
-
-            // Xử lý Buy X items
-            $buyMinQuantity = $this->request->input('buy_min_quantity', 1);
-            $buyConditionType = $this->request->input('buy_condition_type', 'min_quantity');
-            $buyMinOrderValue = $this->request->input('buy_min_order_value');
-            $buyApplyType = $this->request->input('buy_apply_type', 'product');
-            
-            if ($buyApplyType === 'product') {
-                $buyProductIds = $this->request->input('buy_product_ids', []);
-                foreach ($buyProductIds as $itemId) {
-                    // itemId có thể là product_id hoặc variant_id
-                    // Kiểm tra xem có phải variant không
-                    $variant = \App\Models\ProductVariant::find($itemId);
-                    if ($variant) {
-                        // Là variant
-                        $insertData[] = [
-                            'promotion_id' => $this->model->id,
-                            'item_type' => 'buy',
-                            'apply_type' => 'product_variant',
-                            'product_id' => $variant->product_id,
-                            'product_variant_id' => $itemId,
-                            'product_catalogue_id' => null,
-                            'quantity' => $buyMinQuantity,
-                            'min_order_value' => $buyConditionType === 'min_order_value' ? $buyMinOrderValue : null,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ];
-                    } else {
-                        // Là product không có variant
-                        $product = \App\Models\Product::find($itemId);
-                        if ($product) {
-                            $insertData[] = [
-                                'promotion_id' => $this->model->id,
-                                'item_type' => 'buy',
-                                'apply_type' => 'product',
-                                'product_id' => $itemId,
-                                'product_variant_id' => null,
-                                'product_catalogue_id' => null,
-                                'quantity' => $buyMinQuantity,
-                                'min_order_value' => $buyConditionType === 'min_order_value' ? $buyMinOrderValue : null,
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ];
-                        }
-                    }
-                }
-            } elseif ($buyApplyType === 'product_catalogue') {
-                $buyCatalogueIds = $this->request->input('buy_product_catalogue_ids', []);
-                foreach ($buyCatalogueIds as $catalogueId) {
-                    $insertData[] = [
-                        'promotion_id' => $this->model->id,
-                        'item_type' => 'buy',
-                        'apply_type' => 'product_catalogue',
-                        'product_id' => null,
-                        'product_variant_id' => null,
-                        'product_catalogue_id' => $catalogueId,
-                        'quantity' => $buyMinQuantity,
-                        'min_order_value' => $buyConditionType === 'min_order_value' ? $buyMinOrderValue : null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ];
-                }
-            }
-
-            // Xử lý Get Y items
-            $getQuantity = $this->request->input('get_quantity', 1);
-            $getApplyType = $this->request->input('get_apply_type', 'product');
-            
-            if ($getApplyType === 'product') {
-                $getProductIds = $this->request->input('get_product_ids', []);
-                foreach ($getProductIds as $itemId) {
-                    // itemId có thể là product_id hoặc variant_id
-                    // Kiểm tra xem có phải variant không
-                    $variant = \App\Models\ProductVariant::find($itemId);
-                    if ($variant) {
-                        // Là variant
-                        $insertData[] = [
-                            'promotion_id' => $this->model->id,
-                            'item_type' => 'get',
-                            'apply_type' => 'product_variant',
-                            'product_id' => $variant->product_id,
-                            'product_variant_id' => $itemId,
-                            'product_catalogue_id' => null,
-                            'quantity' => $getQuantity,
-                            'min_order_value' => null,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ];
-                    } else {
-                        // Là product không có variant
-                        $product = \App\Models\Product::find($itemId);
-                        if ($product) {
-                            $insertData[] = [
-                                'promotion_id' => $this->model->id,
-                                'item_type' => 'get',
-                                'apply_type' => 'product',
-                                'product_id' => $itemId,
-                                'product_variant_id' => null,
-                                'product_catalogue_id' => null,
-                                'quantity' => $getQuantity,
-                                'min_order_value' => null,
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ];
-                        }
-                    }
-                }
-            } elseif ($getApplyType === 'product_catalogue') {
-                $getCatalogueIds = $this->request->input('get_product_catalogue_ids', []);
-                foreach ($getCatalogueIds as $catalogueId) {
-                    $insertData[] = [
-                        'promotion_id' => $this->model->id,
-                        'item_type' => 'get',
-                        'apply_type' => 'product_catalogue',
-                        'product_id' => null,
-                        'product_variant_id' => null,
-                        'product_catalogue_id' => $catalogueId,
-                        'quantity' => $getQuantity,
-                        'min_order_value' => null,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ];
-                }
-            }
-
-            // Insert tất cả records
-            if (!empty($insertData)) {
-                \Illuminate\Support\Facades\DB::table('promotion_buy_x_get_y_items')->insert($insertData);
-            }
-        }
-
-        // Xử lý combo type
-        if ($this->model->type === 'combo') {
-            // Xóa tất cả combo items cũ
-            \App\Models\PromotionComboItem::where('promotion_id', $this->model->id)->delete();
-            
-            // Lấy combo_items từ request
-            $comboItems = $this->request->input('combo_items', []);
-            
-            if (!empty($comboItems) && is_array($comboItems)) {
                 $insertData = [];
+                $buyMinQuantity = $this->request->input('buy_min_quantity', 1);
+                $buyConditionType = $this->request->input('buy_condition_type', 'min_quantity');
+                $buyMinOrderValue = $this->request->input('buy_min_order_value');
+                $buyApplyType = $this->request->input('buy_apply_type', 'product');
                 
-                foreach ($comboItems as $item) {
-                    if (!isset($item['product_id']) && !isset($item['product_variant_id'])) {
-                        continue; // Bỏ qua nếu không có product_id hoặc variant_id
-                    }
-                    
-                    $productId = isset($item['product_id']) ? $item['product_id'] : null;
-                    $productVariantId = isset($item['product_variant_id']) ? $item['product_variant_id'] : null;
-                    $quantity = isset($item['quantity']) && $item['quantity'] > 0 ? (int)$item['quantity'] : 1;
-                    
-                    // Nếu có variant_id, lấy product_id từ variant
-                    if ($productVariantId && !$productId) {
-                        $variant = \App\Models\ProductVariant::find($productVariantId);
+                if ($buyApplyType === 'product') {
+                    $buyProductIds = $this->request->input('buy_product_ids', []);
+                    foreach ($buyProductIds as $itemId) {
+                        $actualId = $itemId;
+                        $forcedType = null;
+                        if (is_string($itemId)) {
+                            if (str_starts_with($itemId, 'p')) {
+                                $actualId = (int) substr($itemId, 1);
+                                $forcedType = 'product';
+                            } elseif (str_starts_with($itemId, 'v')) {
+                                $actualId = (int) substr($itemId, 1);
+                                $forcedType = 'variant';
+                            }
+                        }
+
+                        if ($forcedType === 'variant') {
+                            $variant = \App\Models\ProductVariant::find($actualId);
+                            if ($variant) {
+                                $insertData[] = [
+                                    'promotion_id' => $this->model->id, 'item_type' => 'buy', 'apply_type' => 'product_variant',
+                                    'product_id' => $variant->product_id, 'product_variant_id' => $actualId,
+                                    'product_catalogue_id' => null, 'quantity' => $buyMinQuantity,
+                                    'min_order_value' => $buyConditionType === 'min_order_value' ? $buyMinOrderValue : null,
+                                    'created_at' => now(), 'updated_at' => now(),
+                                ];
+                                continue;
+                            }
+                        } elseif ($forcedType === 'product') {
+                            $product = \App\Models\Product::find($actualId);
+                            if ($product) {
+                                $insertData[] = [
+                                    'promotion_id' => $this->model->id, 'item_type' => 'buy', 'apply_type' => 'product',
+                                    'product_id' => $actualId, 'product_variant_id' => null,
+                                    'product_catalogue_id' => null, 'quantity' => $buyMinQuantity,
+                                    'min_order_value' => $buyConditionType === 'min_order_value' ? $buyMinOrderValue : null,
+                                    'created_at' => now(), 'updated_at' => now(),
+                                ];
+                                continue;
+                            }
+                        }
+
+                        $variant = \App\Models\ProductVariant::find($actualId);
                         if ($variant) {
-                            $productId = $variant->product_id;
+                            $insertData[] = [
+                                'promotion_id' => $this->model->id, 'item_type' => 'buy', 'apply_type' => 'product_variant',
+                                'product_id' => $variant->product_id, 'product_variant_id' => $actualId,
+                                'product_catalogue_id' => null, 'quantity' => $buyMinQuantity,
+                                'min_order_value' => $buyConditionType === 'min_order_value' ? $buyMinOrderValue : null,
+                                'created_at' => now(), 'updated_at' => now(),
+                            ];
+                        } else {
+                            $product = \App\Models\Product::find($actualId);
+                            if ($product) {
+                                $insertData[] = [
+                                    'promotion_id' => $this->model->id, 'item_type' => 'buy', 'apply_type' => 'product',
+                                    'product_id' => $actualId, 'product_variant_id' => null,
+                                    'product_catalogue_id' => null, 'quantity' => $buyMinQuantity,
+                                    'min_order_value' => $buyConditionType === 'min_order_value' ? $buyMinOrderValue : null,
+                                    'created_at' => now(), 'updated_at' => now(),
+                                ];
+                            }
                         }
                     }
-                    
-                    if ($productId || $productVariantId) {
+                } elseif ($buyApplyType === 'product_catalogue') {
+                    $buyCatalogueIds = $this->request->input('buy_product_catalogue_ids', []);
+                    foreach ($buyCatalogueIds as $catalogueId) {
                         $insertData[] = [
-                            'promotion_id' => $this->model->id,
-                            'product_id' => $productId,
-                            'product_variant_id' => $productVariantId,
-                            'quantity' => $quantity,
-                            'created_at' => now(),
-                            'updated_at' => now(),
+                            'promotion_id' => $this->model->id, 'item_type' => 'buy', 'apply_type' => 'product_catalogue',
+                            'product_id' => null, 'product_variant_id' => null, 'product_catalogue_id' => $catalogueId,
+                            'quantity' => $buyMinQuantity, 'min_order_value' => $buyConditionType === 'min_order_value' ? $buyMinOrderValue : null,
+                            'created_at' => now(), 'updated_at' => now(),
                         ];
                     }
                 }
+
+                $getQuantity = $this->request->input('get_quantity', 1);
+                $getApplyType = $this->request->input('get_apply_type', 'product');
                 
-                // Insert tất cả records
+                if ($getApplyType === 'product') {
+                    $getProductIds = $this->request->input('get_product_ids', []);
+                    foreach ($getProductIds as $itemId) {
+                        $actualId = $itemId;
+                        $forcedType = null;
+                        if (is_string($itemId)) {
+                            if (str_starts_with($itemId, 'p')) {
+                                $actualId = (int) substr($itemId, 1);
+                                $forcedType = 'product';
+                            } elseif (str_starts_with($itemId, 'v')) {
+                                $actualId = (int) substr($itemId, 1);
+                                $forcedType = 'variant';
+                            }
+                        }
+
+                        if ($forcedType === 'variant') {
+                            $variant = \App\Models\ProductVariant::find($actualId);
+                            if ($variant) {
+                                $insertData[] = [
+                                    'promotion_id' => $this->model->id, 'item_type' => 'get', 'apply_type' => 'product_variant',
+                                    'product_id' => $variant->product_id, 'product_variant_id' => $actualId,
+                                    'product_catalogue_id' => null, 'quantity' => $getQuantity, 'min_order_value' => null,
+                                    'created_at' => now(), 'updated_at' => now(),
+                                ];
+                                continue;
+                            }
+                        } elseif ($forcedType === 'product') {
+                            $product = \App\Models\Product::find($actualId);
+                            if ($product) {
+                                $insertData[] = [
+                                    'promotion_id' => $this->model->id, 'item_type' => 'get', 'apply_type' => 'product',
+                                    'product_id' => $actualId, 'product_variant_id' => null,
+                                    'product_catalogue_id' => null, 'quantity' => $getQuantity, 'min_order_value' => null,
+                                    'created_at' => now(), 'updated_at' => now(),
+                                ];
+                                continue;
+                            }
+                        }
+
+                        $variant = \App\Models\ProductVariant::find($actualId);
+                        if ($variant) {
+                            $insertData[] = [
+                                'promotion_id' => $this->model->id, 'item_type' => 'get', 'apply_type' => 'product_variant',
+                                'product_id' => $variant->product_id, 'product_variant_id' => $actualId,
+                                'product_catalogue_id' => null, 'quantity' => $getQuantity, 'min_order_value' => null,
+                                'created_at' => now(), 'updated_at' => now(),
+                            ];
+                        } else {
+                            $product = \App\Models\Product::find($actualId);
+                            if ($product) {
+                                $insertData[] = [
+                                    'promotion_id' => $this->model->id, 'item_type' => 'get', 'apply_type' => 'product',
+                                    'product_id' => $actualId, 'product_variant_id' => null,
+                                    'product_catalogue_id' => null, 'quantity' => $getQuantity, 'min_order_value' => null,
+                                    'created_at' => now(), 'updated_at' => now(),
+                                ];
+                            }
+                        }
+                    }
+                } elseif ($getApplyType === 'product_catalogue') {
+                    $getCatalogueIds = $this->request->input('get_product_catalogue_ids', []);
+                    foreach ($getCatalogueIds as $catalogueId) {
+                        $insertData[] = [
+                            'promotion_id' => $this->model->id, 'item_type' => 'get', 'apply_type' => 'product_catalogue',
+                            'product_id' => null, 'product_variant_id' => null, 'product_catalogue_id' => $catalogueId,
+                            'quantity' => $getQuantity, 'min_order_value' => null,
+                            'created_at' => now(), 'updated_at' => now(),
+                        ];
+                    }
+                }
+
                 if (!empty($insertData)) {
-                    \Illuminate\Support\Facades\DB::table('promotion_combo_items')->insert($insertData);
+                    \Illuminate\Support\Facades\DB::table('promotion_buy_x_get_y_items')->insert($insertData);
                 }
             }
-        } else {
-            // Nếu không phải combo, xóa tất cả combo items
-            \App\Models\PromotionComboItem::where('promotion_id', $this->model->id)->delete();
+
+            // Xử lý combo type
+            if ($this->model->type === 'combo') {
+                \App\Models\PromotionComboItem::where('promotion_id', $this->model->id)->delete();
+                $comboItems = $this->request->input('combo_items', []);
+                if (!empty($comboItems) && is_array($comboItems)) {
+                    $insertData = [];
+                    foreach ($comboItems as $item) {
+                        $productId = $item['product_id'] ?? null;
+                        $productVariantId = $item['product_variant_id'] ?? null;
+                        $quantity = (int)($item['quantity'] ?? 1);
+                        if ($productVariantId && !$productId) {
+                            $variant = \App\Models\ProductVariant::find($productVariantId);
+                            if ($variant) $productId = $variant->product_id;
+                        }
+                        if ($productId || $productVariantId) {
+                            $insertData[] = [
+                                'promotion_id' => $this->model->id, 'product_id' => $productId,
+                                'product_variant_id' => $productVariantId, 'quantity' => $quantity,
+                                'created_at' => now(), 'updated_at' => now(),
+                            ];
+                        }
+                    }
+                    if (!empty($insertData)) \Illuminate\Support\Facades\DB::table('promotion_combo_items')->insert($insertData);
+                }
+            }
         }
         
-        // Gọi parent::afterSave() để clear cache
-        // parent::afterSave() sẽ gọi invalidateCache() để clear tất cả cache liên quan
         return parent::afterSave();
     }
 }
-

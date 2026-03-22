@@ -1146,7 +1146,7 @@ class ProductService extends BaseCacheService implements ProductServiceInterface
     {
         // 1. Fetch Product with standard relations
         // We use repository model() to build query manually
-        $product = $this->repository->model()
+        $product = $this->repository->getModel()
             ->select([
                 'id', 
                 'product_catalogue_id', 
@@ -1167,7 +1167,7 @@ class ProductService extends BaseCacheService implements ProductServiceInterface
         
         return $product;
     }
-    public function getPromotionalProducts(int $limit = 5)
+    public function getPromotionalProducts(int $limit = 10)
     {
         // 1. Get active product_discount promotions
         $activePromotions = \App\Models\Promotion::where('publish', 2) 

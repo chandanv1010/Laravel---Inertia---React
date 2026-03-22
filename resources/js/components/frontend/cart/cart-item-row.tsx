@@ -18,7 +18,8 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
     // Sync from prop to local when prop changes
     useEffect(() => {
         setLocalQuantity(item.quantity);
-    }, [item.quantity]);
+        setIsUpdating(false); 
+    }, [item.quantity, item.row_id, item.updated_at]); 
 
     // Debounced API call
     const debouncedUpdate = useCallback(
@@ -64,7 +65,11 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
     };
 
     return (
-        <div className={`p-4 flex gap-4 group transition-colors items-center ${item.is_gift ? 'bg-green-50/30' : 'hover:bg-gray-50'}`}>
+        <div className={`p-4 flex gap-4 group transition-colors items-center ${
+            item.is_gift ? 'bg-green-50/30' : 
+            item.promo_id ? 'bg-orange-50/30' :
+            'hover:bg-gray-50'
+        }`}>
             {/* Checkbox */}
             <div className="flex-shrink-0">
                 {!item.is_gift && (
@@ -75,8 +80,12 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                             checked={isSelected}
                             onChange={() => onSelect(item.row_id)}
                         />
-                        <div className="w-[20px] h-[20px] border-2 border-blue-600 rounded-[4px] bg-white flex items-center justify-center peer-checked:border-blue-600 transition-all shrink-0 leading-none">
-                            <div className={`w-3 h-3 bg-blue-600 rounded-[2px] transition-transform transform ${isSelected ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}`}></div>
+                        <div className={`w-[20px] h-[20px] border-2 rounded-[4px] bg-white flex items-center justify-center transition-all shrink-0 leading-none ${
+                            item.promo_id ? 'border-orange-500 peer-checked:border-orange-600' : 'border-blue-600 peer-checked:border-blue-600'
+                        }`}>
+                            <div className={`w-3 h-3 rounded-[2px] transition-transform transform ${
+                                isSelected ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
+                            } ${item.promo_id ? 'bg-orange-600' : 'bg-blue-600'}`}></div>
                         </div>
                     </label>
                 )}
@@ -88,7 +97,11 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
             </div>
 
             {/* Image */}
-            <div className="w-24 h-32 bg-gray-100 rounded-md flex-shrink-0 overflow-hidden border border-gray-200 relative">
+            <div className={`w-24 h-32 bg-gray-100 rounded-md flex-shrink-0 overflow-hidden border relative ${
+                item.is_gift ? 'border-green-200' : 
+                item.promo_id ? 'border-orange-200' : 
+                'border-gray-200'
+            }`}>
                 <img
                     src={item.image || '/images/placeholder.png'}
                     alt={item.name}
@@ -99,8 +112,13 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                     }}
                 />
                 {item.is_gift && (
-                    <div className="absolute top-0 right-0 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-bl-md shadow-sm">
-                        GIFT
+                    <div className="absolute top-0 right-0 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-bl-md shadow-sm uppercase">
+                        Gift
+                    </div>
+                )}
+                {item.promo_id && !item.is_gift && (
+                    <div className="absolute top-0 right-0 bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-bl-md shadow-sm uppercase">
+                        Ưu đãi
                     </div>
                 )}
             </div>
@@ -110,7 +128,11 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                 {/* Left: Info & Delete */}
                 <div className="col-span-5 flex flex-col justify-between h-full py-1">
                     <div>
-                        <h3 className={`font-bold text-sm line-clamp-2 mb-1 ${item.is_gift ? 'text-green-800' : 'text-gray-900'}`}>
+                        <h3 className={`font-bold text-sm line-clamp-2 mb-1 ${
+                            item.is_gift ? 'text-green-800' : 
+                            item.promo_id ? 'text-orange-800' :
+                            'text-gray-900'
+                        }`}>
                             {item.name}
                         </h3>
                         <div className="text-xs text-gray-500 mb-2">
@@ -126,14 +148,21 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                         {/* Product Promotions - BXGY Labels */}
                         {item.product_promotions && item.product_promotions.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1">
-                                {item.product_promotions.map((promo: any, idx: number) => (
-                                    <div key={idx} className="flex items-center gap-1 bg-blue-50 text-blue-700 text-[10px] px-1.5 py-0.5 rounded font-medium border border-blue-100">
-                                        <div className="w-3 h-3 bg-blue-600 rounded-full flex items-center justify-center text-[8px] text-white">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                {item.product_promotions.map((promo: any, idx: number) => {
+                                    const isBXGY = promo.type === 'buy_x_get_y';
+                                    return (
+                                        <div key={idx} className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium border ${
+                                            isBXGY && item.promo_id ? 'bg-orange-50 text-orange-700 border-orange-100' : 'bg-blue-50 text-blue-700 border-blue-100'
+                                        }`}>
+                                            <div className={`w-3 h-3 rounded-full flex items-center justify-center text-[8px] text-white ${
+                                                isBXGY && item.promo_id ? 'bg-orange-600' : 'bg-blue-600'
+                                            }`}>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                            </div>
+                                            {promo.name}
                                         </div>
-                                        {promo.name}
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                         
@@ -144,6 +173,16 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                                 </span>
                                 Quà tặng kèm theo
+                            </div>
+                        )}
+
+                        {item.promo_id && !item.is_gift && (
+                            <div className="mt-2 inline-flex items-center gap-1 text-orange-600 font-bold text-[11px] uppercase tracking-wider">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                                </span>
+                                Sản phẩm ưu đãi mua kèm
                             </div>
                         )}
                     </div>
@@ -197,11 +236,15 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
 
                 {/* Right: Price */}
                 <div className="col-span-3 text-right">
-                    <div className={`font-bold text-base ${item.is_gift ? 'text-green-600' : 'text-gray-900'}`}>
+                    <div className={`font-bold text-base ${
+                        item.is_gift ? 'text-green-600' : 
+                        item.promo_id ? 'text-orange-600' :
+                        'text-gray-900'
+                    }`}>
                         {item.is_gift ? 'Miễn phí' : formatPrice(item.price * (typeof localQuantity === 'number' ? localQuantity : item.quantity))}
                     </div>
 
-                    {!item.is_gift && item.quantity > 1 && (
+                    {!item.is_gift && (typeof localQuantity === 'number' ? localQuantity : item.quantity) > 1 && (
                         <div className="text-[11px] text-gray-500 mt-0.5">
                             ({formatPrice(item.price)}/sp)
                         </div>

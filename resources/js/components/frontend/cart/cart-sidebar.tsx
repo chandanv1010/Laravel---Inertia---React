@@ -20,49 +20,50 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
     );
 
     // Sync selectedItems when cartItems change (remove invalid IDs, add default if empty?)
+    // Sync selectedItems with cartItems (initial all-select, auto-select new items, and cleanup old items)
     useEffect(() => {
         if (cartItems.length === 0) {
-            setSelectedItems([]);
+            if (selectedItems.length > 0) setSelectedItems([]);
             return;
         }
 
-        // Optional: If you want to force "Select All" ONLY on initial load (empty selection), do this:
-        // if (selectedItems.length === 0) {
-        //     setSelectedItems(cartItems.map(item => item.row_id));
-        // }
-        // BUT current behavior "Auto select new items" implies:
-        // Let's keep existing logic but just ensure validity?
-        // Actually the user probably wants "Always Select All" when entering the cart.
-
-        // Let's replicate strict logic:
-        // If the list of IDs changes radically, maybe reset?
-        // For now, let's just stick to "Select All on Load" behavior but implementing it more safely.
-        // If we want to persist selection across quantity updates, we shouldn't reset.
-
-        // Filter out selectedItems that are no longer in cart
         const currentIds = cartItems.map(i => i.row_id);
-        const validSelections = selectedItems.filter(id => currentIds.includes(id));
+        
+        setSelectedItems(prev => {
+            // 1. Initial load or refresh from empty state: select all
+            if (prev.length === 0) return currentIds;
 
-        // If this was a refresh or initial load (or previous selection was empty?), maybe select all?
-        // Let's stick to the previous simple UX: Select all if `cartItems` array changes length (added/removed).
-        // But simply filtering is safer for quantity updates.
+            // 2. Filter out IDs no longer in cart
+            const valid = prev.filter(id => currentIds.includes(id));
+            
+            // 3. Auto-select NEW items (added from detail page or buy-X-get-Y)
+            const news = currentIds.filter(id => !prev.includes(id));
 
-        if (validSelections.length !== selectedItems.length) {
-            setSelectedItems(validSelections);
+            // 4. Auto-select reward rows if their parent is selected
+            const rewardsToSelect = cartItems.filter(item => {
+                if (!item.promo_id || nextIncluded(valid, news, item.row_id)) return false;
+                const parent = cartItems.find(i => 
+                    i.product_id === item.product_id && 
+                    (i.variant_id ?? 0) === (item.variant_id ?? 0) && 
+                    !i.promo_id
+                );
+                return parent && nextIncluded(valid, news, parent.row_id);
+            }).map(i => i.row_id);
+
+            const next = Array.from(new Set([...valid, ...news, ...rewardsToSelect]));
+
+            // Prevent redundant state updates
+            if (next.length === prev.length && next.every(id => prev.includes(id))) {
+                return prev;
+            }
+            return next;
+        });
+
+        // Helper to check if ID will be included in next state
+        function nextIncluded(valid: string[], news: string[], id: string) {
+            return valid.includes(id) || news.includes(id);
         }
-
-        // If we have new items, should we auto-select them?
-        // The original code:
-        // if (cartItems.length > 0) setSelectedItems(all);
-
-        // Let's just default to selecting ALL if the cart length changes, which matches original intent but might annoy if user carefully deselected.
-        // Better: If unselected items are removed, keep valid selections. If new items added, maybe select them?
-        // Simplify: Just default to "Select All" whenever cartItems changes length, as per original.
-        if (cartItems.length > 0 && selectedItems.length === 0) {
-            setSelectedItems(cartItems.map(item => item.row_id));
-        }
-
-    }, [cartItems.length]); // Depend on length like before, or maybe better on cartItems to catch ID changes.
+    }, [cartItems]);
 
     const handleSelectAll = () => {
         if (isAllSelected) {
@@ -94,9 +95,9 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
         }
     };
 
-    const handleAddPromoItem = async (product: any) => {
+    const handleAddPromoItem = async (reward: any) => {
         try {
-            await addToCart(product.id, product.variant_id || null, 1);
+            await addToCart(reward.id, reward.variant_id || null, 1, reward.promo_id);
         } catch (error) {
             console.error("Failed to add promo item", error);
         }

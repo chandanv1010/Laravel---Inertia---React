@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 
 class CartController extends Controller
 {
+    protected CartServiceInterface $cartService;
     protected \App\Services\Interfaces\Product\ProductServiceInterface $productService;
 
     public function __construct(CartServiceInterface $cartService, \App\Services\Interfaces\Product\ProductServiceInterface $productService)
@@ -27,6 +28,7 @@ class CartController extends Controller
 
     public function index(): JsonResponse
     {
+        $this->cartService->recalculate();
         $cart = $this->cartService->get();
         return response()->json([
             'status' => 'success',
@@ -39,14 +41,16 @@ class CartController extends Controller
         $request->validate([
             'product_id' => 'required|integer|exists:products,id',
             'variant_id' => 'nullable|integer|exists:product_variants,id',
-            'quantity' => 'required|integer|min:1'
+            'quantity' => 'required|integer|min:1',
+            'promo_id' => 'nullable|integer|exists:promotions,id'
         ]);
 
         try {
             $cart = $this->cartService->add(
                 $request->input('product_id'),
                 $request->input('variant_id'),
-                $request->input('quantity')
+                $request->input('quantity'),
+                $request->input('promo_id')
             );
 
             return response()->json([

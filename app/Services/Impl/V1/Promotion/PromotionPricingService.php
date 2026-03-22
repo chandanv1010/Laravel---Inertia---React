@@ -550,28 +550,32 @@ class PromotionPricingService
             return $this->emptyPriceResult(0);
         }
 
-        // PRIORITY 1: Check wholesale pricing tiers (Product only - overrides everything)
-        if ($isProduct && $entity->pricingTiers && $entity->pricingTiers->isNotEmpty()) {
-            $tierPrice = $this->calculateWholesaleTierPrice($entity->pricingTiers, $quantity);
+        // PRIORITY 1: Check wholesale pricing tiers (Product or Variant's parent product)
+        $product = $isVariant ? $entity->product : $entity;
+        if ($product && $product->pricingTiers && $product->pricingTiers->isNotEmpty()) {
+            $tierPrice = $this->calculateWholesaleTierPrice($product->pricingTiers, $quantity);
 
-            $result = [
-                'original_price' => $retailPrice,
-                'final_price' => $tierPrice,
-                'discount_amount' => $retailPrice - $tierPrice,
-                'discount_percent' => $retailPrice > 0 ? round((($retailPrice - $tierPrice) / $retailPrice) * 100, 2) : 0,
-                'applied_promotions' => [],
-                'is_wholesale_tier' => true,
-                'has_discount' => $tierPrice < $retailPrice,
-                'promotion_id' => null,
-                'promotion_name' => null,
-            ];
+            // If tierPrice is NULL, it means no tier matched (quantity too low), so fall back to retail/promotion
+            if ($tierPrice !== null) {
+                $result = [
+                    'original_price' => $retailPrice,
+                    'final_price' => $tierPrice,
+                    'discount_amount' => $retailPrice - $tierPrice,
+                    'discount_percent' => $retailPrice > 0 ? round((($retailPrice - $tierPrice) / $retailPrice) * 100, 2) : 0,
+                    'applied_promotions' => [],
+                    'is_wholesale_tier' => true,
+                    'has_discount' => $tierPrice < $retailPrice,
+                    'promotion_id' => null,
+                    'promotion_name' => null,
+                ];
 
-            // Add tax if enabled
-            if ($includeTax) {
-                $result = $this->addTaxToResult($result, $entity);
+                // Add tax if enabled
+                if ($includeTax) {
+                    $result = $this->addTaxToResult($result, $entity);
+                }
+
+                return $result;
             }
-
-            return $result;
         }
 
         // PRIORITY 2: Calculate promotion pricing
@@ -607,7 +611,7 @@ class PromotionPricingService
     /**
      * Calculate price from wholesale pricing tiers based on quantity
      */
-    private function calculateWholesaleTierPrice($tiers, int $quantity): float
+    private function calculateWholesaleTierPrice($tiers, int $quantity): ?float
     {
         $sortedTiers = $tiers->sortBy('min_quantity');
         $applicableTier = null;
@@ -621,12 +625,8 @@ class PromotionPricingService
             }
         }
 
-        // If no tier matches, return the last (highest) tier price
-        if (!$applicableTier) {
-            $applicableTier = $sortedTiers->last();
-        }
-
-        return (float) ($applicableTier->price ?? 0);
+        // Return the price if a tier matched, otherwise return null (let caller fall back to RetailPrice)
+        return $applicableTier ? (float) $applicableTier->price : null;
     }
 
     /**

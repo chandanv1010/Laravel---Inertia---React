@@ -22,7 +22,7 @@ interface Product {
 }
 
 interface ProductVariant {
-    id: number
+    id: string | number
     name: string
     sku: string
     price?: number
@@ -35,7 +35,7 @@ interface ProductSelectionModalProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     onConfirm: (selectedProducts: ProductVariant[]) => void
-    initialSelectedIds?: number[]
+    initialSelectedIds?: (string | number)[]
     initialSelectedProducts?: Array<any>
     title?: string
     description?: string

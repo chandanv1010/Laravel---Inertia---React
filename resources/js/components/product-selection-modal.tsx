@@ -51,9 +51,9 @@ interface Product {
 interface ProductSelectionModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onConfirm: (selectedProducts: Array<{ id: number; name: string; sku: string; image?: string; productId?: number; productName?: string }>) => void;
-    initialSelectedIds?: number[];
-    initialSelectedProducts?: Array<{ id: number; name: string; sku: string; image?: string; productId?: number; productName?: string }>;
+    onConfirm: (selectedProducts: Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number; productName?: string }>) => void;
+    initialSelectedIds?: (string | number)[];
+    initialSelectedProducts?: Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number; productName?: string }>;
     title?: string;
     description?: string;
     showPrice?: boolean;
@@ -81,7 +81,7 @@ export function ProductSelectionModal({
     const [isLoading, setIsLoading] = useState(false);
     const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
     // Lưu trữ full product objects đã chọn để giữ lại khi chuyển trang
-    const [selectedProductsMap, setSelectedProductsMap] = useState<Map<string, { id: number; name: string; sku: string; image?: string; productId?: number; productName?: string }>>(new Map());
+    const [selectedProductsMap, setSelectedProductsMap] = useState<Map<string, { id: string | number; name: string; sku: string; image?: string; productId?: number; productName?: string }>>(new Map());
     const [catalogueId, setCatalogueId] = useState<string>('all');
     const [catalogues, setCatalogues] = useState<Array<{ id: number; name: string }>>([]);
     const [currentPage, setCurrentPage] = useState(1);
@@ -192,7 +192,7 @@ export function ProductSelectionModal({
         if (open) {
             // Khởi tạo selected products từ initialSelectedIds và initialSelectedProducts
             const initialSet = new Set<string>();
-            const initialMap = new Map<string, { id: number; name: string; sku: string; image?: string; productId?: number; productName?: string }>();
+            const initialMap = new Map<string, { id: string | number; name: string; sku: string; image?: string; productId?: number; productName?: string }>();
 
             // Nếu có initialSelectedProducts, ưu tiên dùng để giữ lại full data
             if (initialSelectedProducts && initialSelectedProducts.length > 0) {
@@ -357,7 +357,7 @@ export function ProductSelectionModal({
 
     const handleConfirm = () => {
         // Lấy tất cả sản phẩm đã chọn từ map (bao gồm cả những sản phẩm không có trong trang hiện tại)
-        const selected: Array<{ id: number; name: string; sku: string; image?: string; productId?: number; productName?: string }> = [];
+        const selected: Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number; productName?: string }> = [];
 
         // Cập nhật map với các sản phẩm từ trang hiện tại
         const updatedMap = new Map(selectedProductsMap);

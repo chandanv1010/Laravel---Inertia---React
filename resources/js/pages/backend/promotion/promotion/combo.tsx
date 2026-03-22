@@ -170,18 +170,21 @@ export default function Combo({
         return format(d, 'dd/MM/yyyy HH:mm')
     }
 
-    const handleProductsSelected = (products: Array<{ id: number; name: string; sku: string; image?: string; productId?: number; productName?: string }>) => {
+    const handleProductsSelected = (products: Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number; productName?: string }>) => {
         // Thêm các sản phẩm đã chọn vào combo items
         const newItems: ComboItem[] = products.map(p => {
-            // Kiểm tra xem có phải variant không (có productId và id !== productId)
-            const isVariant = p.productId && p.id !== p.productId
+            const idStr = String(p.id);
+            const actualId = parseInt(idStr.replace(/^[pv]/, ''));
+            
+            // Xác định là product hay variant
+            const isProduct = idStr.startsWith('p') || (p.productId && p.id === p.productId);
 
             return {
-                product_id: isVariant ? p.productId : p.id,
-                product_variant_id: isVariant ? p.id : undefined,
+                product_id: isProduct ? actualId : p.productId,
+                product_variant_id: isProduct ? undefined : actualId,
                 quantity: 1,
-                product: isVariant ? { id: p.productId!, name: p.productName || p.name } : { id: p.id, name: p.name, sku: p.sku, image: p.image },
-                variant: isVariant ? { id: p.id, name: p.name, sku: p.sku, image: p.image } : undefined,
+                product: isProduct ? { id: actualId, name: p.name, sku: p.sku, image: p.image } : { id: p.productId!, name: p.productName || p.name },
+                variant: isProduct ? undefined : { id: actualId, name: p.name, sku: p.sku, image: p.image },
             }
         })
 

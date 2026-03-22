@@ -56,6 +56,7 @@ interface ProductServiceInterface extends BaseServiceInterface{
      * @param int $limit
      * @return array
      */
+    public function getPromotionalProducts(int $limit = 10);
     /**
      * Get detailed product information for frontend (with all relations)
      * 

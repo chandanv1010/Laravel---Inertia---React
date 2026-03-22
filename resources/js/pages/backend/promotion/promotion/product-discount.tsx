@@ -10,7 +10,7 @@ import CustomPageHeading from '@/components/custom-page-heading'
 import CustomCard from '@/components/custom-card'
 import InputError from '@/components/input-error'
 import { type BreadcrumbItem } from '@/types'
-import { LoaderCircle, ArrowLeft, Package, Layers, X, Search } from 'lucide-react'
+import { LoaderCircle, ArrowLeft, Package, Layers, X, Search, CheckCircle2, XCircle } from 'lucide-react'
 import { setPreserveState } from '@/lib/helper'
 import { PriceInput } from '@/components/price-input'
 import { format } from 'date-fns'
@@ -33,7 +33,7 @@ interface ProductDiscountPromotion {
     apply_source: 'all' | 'product_variant' | 'product_catalogue'
     product_variant_ids?: number[]
     product_catalogue_ids?: number[]
-    product_items?: Array<{ id: number; name: string; sku: string; image?: string }>
+    product_items?: Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number }>
     product_catalogue_items?: Array<{ id: number; name: string; image?: string }>
     combine_with_order_discount: boolean
     combine_with_product_discount: boolean
@@ -81,7 +81,7 @@ export default function ProductDiscount({
     const [noEndDate, setNoEndDate] = useState(promotion?.no_end_date || false)
     const [showProductModal, setShowProductModal] = useState(false)
     const [showCategoryModal, setShowCategoryModal] = useState(false)
-    const [selectedProducts, setSelectedProducts] = useState<Array<{ id: number; name: string; sku: string; image?: string }>>(
+    const [selectedProducts, setSelectedProducts] = useState<Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number }>>(
         promotion?.product_items || []
     )
     const [selectedCatalogues, setSelectedCatalogues] = useState<Array<{ id: number; name: string; image?: string }>>(
@@ -89,7 +89,7 @@ export default function ProductDiscount({
     )
     const [productSearch, setProductSearch] = useState('')
     const [categorySearch, setCategorySearch] = useState('')
-    const [tempSelectedProducts, setTempSelectedProducts] = useState<Array<{ id: number; name: string; sku: string; image?: string }>>([])
+    const [tempSelectedProducts, setTempSelectedProducts] = useState<Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number }>>([])
     const [tempSelectedCatalogues, setTempSelectedCatalogues] = useState<Array<{ id: number; name: string; image?: string }>>([])
     const [combineOrderDiscount, setCombineOrderDiscount] = useState(promotion?.combine_with_order_discount || false)
     const [combineProductDiscount, setCombineProductDiscount] = useState(promotion?.combine_with_product_discount || false)
@@ -267,7 +267,7 @@ export default function ProductDiscount({
 
     const [promotionName, setPromotionName] = useState(promotion?.name || '')
 
-    const handleProductsSelected = (products: Array<{ id: number; name: string; sku: string; image?: string }>) => {
+    const handleProductsSelected = (products: Array<{ id: string | number; name: string; sku: string; image?: string; productId?: number }>) => {
         setSelectedProducts(products)
         setShowProductModal(false)
     }
@@ -277,7 +277,7 @@ export default function ProductDiscount({
         setShowCategoryModal(false)
     }
 
-    const removeProduct = (id: number) => {
+    const removeProduct = (id: string | number) => {
         setSelectedProducts(prev => prev.filter(p => p.id !== id))
     }
 
@@ -311,12 +311,16 @@ export default function ProductDiscount({
 
                             if (applySource === 'product_variant') {
                                 selectedProducts.forEach(p => {
-                                    // Nếu có productId và id === productId thì là product không có variant
-                                    if (p.productId && p.id === p.productId) {
-                                        productIds.push(p.id);
+                                    const idStr = String(p.id);
+                                    let actualId = parseInt(idStr.replace(/^[pv]/, ''));
+                                    
+                                    // Xác định là product hay variant
+                                    const isProduct = idStr.startsWith('p') || (p.productId && p.id === p.productId);
+                                    
+                                    if (isProduct) {
+                                        productIds.push(actualId);
                                     } else {
-                                        // Ngược lại là variant
-                                        productVariantIds.push(p.id);
+                                        productVariantIds.push(actualId);
                                     }
                                 });
                             }
