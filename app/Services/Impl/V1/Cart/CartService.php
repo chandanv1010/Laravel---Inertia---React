@@ -210,210 +210,8 @@ class CartService implements CartServiceInterface
         }
         unset($item);
 
-        // 3. BXGY
-        $promos = \App\Models\Promotion::where('publish', 2)->where('type', 'buy_x_get_y')->expiryStatus('active')->orderBy('id', 'desc')->get();
-        $bxgyDisc = 0;
-        
-        foreach ($promos as $promo) {
-            $buyRules = $promo->buy_x_get_y_items->where('item_type', 'buy');
-            $getRules = $promo->buy_x_get_y_items->where('item_type', 'get');
-            if ($buyRules->isEmpty() || $getRules->isEmpty()) continue;
-
-            $buyNeeded = (int)$buyRules->sum('quantity');
-            // Removed global $overlap calculation
-
-            $pool = [];
-            foreach ($cart['items'] as $rid => $it) {
-                // If it's already a reward for a PREVIOUS promo in this save() call, skip.
-                if (!empty($it['promo_id'])) continue; 
-                
-                // Track available quantity (Total - what was already 'spent' as buy condition)
-                $avail = (int)$it['quantity'] - (int)($it['spent_quantity'] ?? 0);
-                if ($avail <= 0) continue;
-
-                $isB = false; foreach ($buyRules as $r) if ($this->match($it, $r)) { $isB = true; break; }
-                $isG = false; foreach ($getRules as $r) if ($this->match($it, $r)) { $isG = true; break; }
-                
-                if ($isB || $isG) {
-                    $pool[$rid] = [
-                        'qty' => $avail, 
-                        'isB' => $isB, 
-                        'isG' => $isG, 
-                        'price' => $it['prices']['retail'] ?? 0,
-                        'isSelf' => ($isB && $isG) // Product can be both buy and get
-                    ];
-                }
-            }
-            
-            // SORT POOL: 
-            // 1. Prioritize 'isSelf' (Same item reward) to avoid "stealing" rewards by more expensive items 
-            //    when a product can satisfy its own promotion (like 3 V18).
-            // 2. Then sort by Price DESC to give best value for general cases.
-            uasort($pool, function($a, $b) {
-                if ($a['isSelf'] && !$b['isSelf']) return -1;
-                if (!$a['isSelf'] && $b['isSelf']) return 1;
-                return ($b['price'] ?? 0) <=> ($a['price'] ?? 0);
-            });
-
-            $bQty = 0; foreach ($pool as $p) if ($p['isB']) $bQty += $p['qty'];
-            
-            // --- PROACTIVE INJECTION ---
-            // ONLY for Free Gifts. Non-free rewards (percentage/fixed) should ONLY split existing items.
-            if ($promo->discount_type === 'free') {
-                $isGiftPromo = true;
-                $sessionsForInj = ($buyNeeded > 0) ? (int)floor($bQty / $buyNeeded) : 0;
-                if ($sessionsForInj > 0) {
-                    foreach ($getRules as $gr) {
-                        $pid = (int)$gr->product_id;
-                        $vid = (int)$gr->product_variant_id;
-                        
-                        $neededOverall = $sessionsForInj * (int)$gr->quantity;
-                        // Count only existing gifts for this product to avoid "stealing" from base items
-                        $currentGifts = 0;
-                        foreach ($cart['items'] as $it) {
-                            if (!empty($it['is_gift']) && (int)$it['product_id'] === $pid && (int)($it['variant_id'] ?? 0) === ($vid ?: 0)) {
-                                $currentGifts += $it['quantity'];
-                            }
-                        }
-
-                        if ($currentGifts < $neededOverall) {
-                            $this->internalInjection($cart, $pid, $vid ?: null, $neededOverall - $currentGifts, (int)$promo->id, $isGiftPromo);
-                        }
-                    }
-                }
-            }
-            // --- END PROACTIVE INJECTION ---
-
-            // Re-calculate pool/sessions after injection
-            $pool = [];
-            foreach ($cart['items'] as $rid => $it) {
-                if (!empty($it['promo_id'])) continue;
-                $avail = (int)$it['quantity'] - (int)($it['spent_quantity'] ?? 0);
-                if ($avail <= 0) continue;
-
-                $isB = false; foreach ($buyRules as $r) if ($this->match($it, $r)) { $isB = true; break; }
-                $isG = false; foreach ($getRules as $r) if ($this->match($it, $r)) { $isG = true; break; }
-                if ($isB || $isG) {
-                    $pool[$rid] = [
-                        'qty' => $avail, 
-                        'isB' => $isB, 
-                        'isG' => $isG, 
-                        'price' => $it['prices']['retail'] ?? 0,
-                        'isSelf' => ($isB && $isG)
-                    ];
-                }
-            }
-            uasort($pool, function($a, $b) {
-                if ($a['isSelf'] && !$b['isSelf']) return -1;
-                if (!$a['isSelf'] && $b['isSelf']) return 1;
-                return ($b['price'] ?? 0) <=> ($a['price'] ?? 0);
-            });
-            // 1. Calculate Sessions
-            // CORRECT FORMULA: Each session consumes `buyNeeded` items from buy pool, PLUS any
-            // overlap get-items (same product in both buy and get rules). Because the reward
-            // itself is taken from the same pool, the total "cost" per session is:
-            //   itemsPerSession = buyNeeded + sum(gr->quantity for overlapping get-rules)
-            // Example: Buy 2 V18, Get 1 V18 → 3 V18 per session → floor(4/3) = 1, not floor(4/2) = 2.
-            $totalBuyQty = 0;
-            foreach ($pool as $p) if ($p['isB']) $totalBuyQty += $p['qty'];
-
-            // Calculate overlap quantity (get-rules that share the same product as a buy-rule).
-            $overlapGetQty = 0;
-            $overlapPids = [];
-            foreach ($getRules as $gr) {
-                foreach ($buyRules as $br) {
-                    if ($gr->product_id == $br->product_id && $gr->product_variant_id == $br->product_variant_id) {
-                        $overlapGetQty += (int)$gr->quantity;
-                        $overlapPids[] = $gr->product_id;
-                    }
-                }
-            }
-
-            // itemsPerSession = items needed from the shared pool per session
-            $itemsPerSession = $buyNeeded + $overlapGetQty;
-            $sessions = ($itemsPerSession > 0) ? (int)floor($totalBuyQty / $itemsPerSession) : 0;
-
-            if ($sessions <= 0) continue;
-
-            // 2. RE-PRICE EXISTING REWARDS (injected free gifts etc.)
-            $existingRewardsCount = 0;
-            foreach ($cart['items'] as $grid => $it) {
-                if (($it['promo_id'] ?? null) == $promo->id) {
-                    $existingRewardsCount += (int)$it['quantity'];
-                    $this->applyBXGY($cart['items'][$grid], $promo, $it['quantity']);
-                    $bxgyDisc += (($cart['items'][$grid]['bxgy_unit_discount'] ?? 0) * $it['quantity']);
-                }
-            }
-
-            // 3. FULFILLMENT: Iterate each get-rule independently
-            foreach ($getRules as $gr) {
-                $ruleQuota = $sessions * (int)$gr->quantity;
-
-                // Count existing rewards for this specific get-rule product
-                $ruleExistingCount = 0;
-                foreach ($cart['items'] as $it) {
-                    if (($it['promo_id'] ?? null) == $promo->id
-                        && (int)$it['product_id'] === (int)$gr->product_id
-                        && (int)($it['variant_id'] ?? 0) === (int)($gr->product_variant_id ?? 0)
-                    ) {
-                        $ruleExistingCount += (int)$it['quantity'];
-                    }
-                }
-
-                $remainingQuota = $ruleQuota - $ruleExistingCount;
-                if ($remainingQuota <= 0) continue;
-
-                // Split rewards for this rule from matching items in the pool
-                foreach ($pool as $rid => &$p) {
-                    if ($remainingQuota <= 0) break;
-                    if (!isset($cart['items'][$rid]) || $p['qty'] <= 0) continue;
-                    if (!$this->match($cart['items'][$rid], $gr)) continue;
-
-                    $take = min($p['qty'], $remainingQuota);
-                    $rewId = $this->generateRowId(
-                        (int)$cart['items'][$rid]['product_id'],
-                        (int)($cart['items'][$rid]['variant_id'] ?? 0),
-                        (int)$promo->id,
-                        'reward'
-                    );
-
-                    if (isset($cart['items'][$rewId])) {
-                        // Add to existing reward row if present
-                        $cart['items'][$rewId]['quantity'] += $take;
-                    } else {
-                        $cart['items'][$rewId] = $cart['items'][$rid];
-                        $cart['items'][$rewId]['row_id'] = $rewId;
-                        $cart['items'][$rewId]['quantity'] = $take;
-                        $cart['items'][$rewId]['promo_id'] = $promo->id;
-                        unset($cart['items'][$rewId]['spent_quantity']);
-                    }
-
-                    $this->applyBXGY($cart['items'][$rewId], $promo, $cart['items'][$rewId]['quantity']);
-                    $bxgyDisc += ($cart['items'][$rewId]['bxgy_unit_discount'] ?? 0) * $take;
-
-                    // Shrink original row
-                    $cart['items'][$rid]['quantity'] = max(0, $cart['items'][$rid]['quantity'] - $take);
-                    $p['qty'] -= $take;
-                    $remainingQuota -= $take;
-                    if ($cart['items'][$rid]['quantity'] <= 0) unset($cart['items'][$rid]);
-                }
-                unset($p);
-            }
-
-            // Step B: Mark BUY CONDITIONS with spent_quantity (prevent double-dipping)
-            $buyToMark = $sessions * $buyNeeded;
-            foreach ($pool as $rid => &$p) {
-                if ($buyToMark <= 0) break;
-                if (!isset($cart['items'][$rid]) || $p['qty'] <= 0) continue;
-                if (!$p['isB']) continue;
-
-                $take = min($p['qty'], $buyToMark);
-                $cart['items'][$rid]['spent_quantity'] = (int)($cart['items'][$rid]['spent_quantity'] ?? 0) + $take;
-                $p['qty'] -= $take;
-                $buyToMark -= $take;
-            }
-            unset($p);
-        }
+        // 3. BXGY (Isolated for maintainability)
+        $bxgyDisc = $this->applyBuyXGetYPromotions($cart);
 
         foreach ($cart['items'] as $rid => $it) {
             \Illuminate\Support\Facades\Log::info("  [POST-BXGY] RID: $rid, Qty: {$it['quantity']}, Price: {$it['price']}");
@@ -421,11 +219,12 @@ class CartService implements CartServiceInterface
 
         // 3.3 LABEL PROPAGATION
         // Ensure all items eligible for BXGY (buy or get) have the label, even if not currently rewards.
+        $bxgyPromos = \App\Models\Promotion::where('publish', 2)->where('type', 'buy_x_get_y')->expiryStatus('active')->orderBy('id', 'desc')->get();
         foreach ($cart['items'] as &$it) {
             if (!empty($it['promo_id'])) continue; 
             if (!isset($it['product_promotions'])) $it['product_promotions'] = [];
             
-            foreach ($promos as $promo) {
+            foreach ($bxgyPromos as $promo) {
                 $buyRules = $promo->buy_x_get_y_items->where('item_type', 'buy');
                 $getRules = $promo->buy_x_get_y_items->where('item_type', 'get');
                 
@@ -526,6 +325,160 @@ class CartService implements CartServiceInterface
         } finally {
             $this->isSaving = false;
         }
+    }
+
+    protected function applyBuyXGetYPromotions(array &$cart): float
+    {
+        $promos = \App\Models\Promotion::where('publish', 2)->where('type', 'buy_x_get_y')->expiryStatus('active')->orderBy('id', 'desc')->get();
+        $bxgyDisc = 0;
+
+        foreach ($promos as $promo) {
+            $buyRules = $promo->buy_x_get_y_items->where('item_type', 'buy');
+            $getRules = $promo->buy_x_get_y_items->where('item_type', 'get');
+            if ($buyRules->isEmpty() || $getRules->isEmpty()) continue;
+
+            $buyNeeded = (int)$buyRules->sum('quantity');
+
+            $pool = [];
+            foreach ($cart['items'] as $rid => $it) {
+                if (!empty($it['promo_id'])) continue; 
+                $avail = (int)$it['quantity'] - (int)($it['spent_quantity'] ?? 0);
+                if ($avail <= 0) continue;
+
+                $isB = false; foreach ($buyRules as $r) if ($this->match($it, $r)) { $isB = true; break; }
+                $isG = false; foreach ($getRules as $r) if ($this->match($it, $r)) { $isG = true; break; }
+                
+                if ($isB || $isG) {
+                    $pool[$rid] = [
+                        'qty' => $avail, 
+                        'isB' => $isB, 
+                        'isG' => $isG, 
+                        'price' => $it['prices']['retail'] ?? 0,
+                        'isSelf' => ($isB && $isG)
+                    ];
+                }
+            }
+            
+            uasort($pool, function($a, $b) {
+                if ($a['isSelf'] && !$b['isSelf']) return -1;
+                if (!$a['isSelf'] && $b['isSelf']) return 1;
+                return ($b['price'] ?? 0) <=> ($a['price'] ?? 0);
+            });
+
+            $bQty = 0; foreach ($pool as $p) if ($p['isB']) $bQty += $p['qty'];
+            
+            if ($promo->discount_type === 'free') {
+                $isGiftPromo = true;
+                $sessionsForInj = ($buyNeeded > 0) ? (int)floor($bQty / $buyNeeded) : 0;
+                if ($sessionsForInj > 0) {
+                    foreach ($getRules as $gr) {
+                        $pid = (int)$gr->product_id;
+                        $vid = (int)$gr->product_variant_id;
+                        $neededOverall = $sessionsForInj * (int)$gr->quantity;
+                        $currentGifts = 0;
+                        foreach ($cart['items'] as $it) {
+                            if (!empty($it['is_gift']) && (int)$it['product_id'] === $pid && (int)($it['variant_id'] ?? 0) === ($vid ?: 0)) {
+                                $currentGifts += $it['quantity'];
+                            }
+                        }
+                        if ($currentGifts < $neededOverall) {
+                            $this->internalInjection($cart, $pid, $vid ?: null, $neededOverall - $currentGifts, (int)$promo->id, $isGiftPromo);
+                        }
+                    }
+                }
+            }
+
+            $pool = [];
+            foreach ($cart['items'] as $rid => $it) {
+                if (!empty($it['promo_id'])) continue;
+                $avail = (int)$it['quantity'] - (int)($it['spent_quantity'] ?? 0);
+                if ($avail <= 0) continue;
+                $isB = false; foreach ($buyRules as $r) if ($this->match($it, $r)) { $isB = true; break; }
+                $isG = false; foreach ($getRules as $r) if ($this->match($it, $r)) { $isG = true; break; }
+                if ($isB || $isG) {
+                    $pool[$rid] = ['qty' => $avail, 'isB' => $isB, 'isG' => $isG, 'price' => $it['prices']['retail'] ?? 0, 'isSelf' => ($isB && $isG)];
+                }
+            }
+            uasort($pool, function($a, $b) {
+                if ($a['isSelf'] && !$b['isSelf']) return -1;
+                if (!$a['isSelf'] && $b['isSelf']) return 1;
+                return ($b['price'] ?? 0) <=> ($a['price'] ?? 0);
+            });
+
+            $totalBuyQty = 0;
+            foreach ($pool as $p) if ($p['isB']) $totalBuyQty += $p['qty'];
+            $overlapGetQty = 0;
+            foreach ($getRules as $gr) {
+                foreach ($buyRules as $br) {
+                    if ($gr->product_id == $br->product_id && $gr->product_variant_id == $br->product_variant_id) {
+                        $overlapGetQty += (int)$gr->quantity;
+                    }
+                }
+            }
+
+            $itemsPerSession = $buyNeeded + $overlapGetQty;
+            $sessions = ($itemsPerSession > 0) ? (int)floor($totalBuyQty / $itemsPerSession) : 0;
+            if ($sessions <= 0) continue;
+
+            foreach ($cart['items'] as $grid => $it) {
+                if (($it['promo_id'] ?? null) == $promo->id) {
+                    $this->applyBXGY($cart['items'][$grid], $promo, $it['quantity']);
+                    $bxgyDisc += (($cart['items'][$grid]['bxgy_unit_discount'] ?? 0) * $it['quantity']);
+                }
+            }
+
+            foreach ($getRules as $gr) {
+                $ruleQuota = $sessions * (int)$gr->quantity;
+                $ruleExistingCount = 0;
+                foreach ($cart['items'] as $it) {
+                    if (($it['promo_id'] ?? null) == $promo->id && (int)$it['product_id'] === (int)$gr->product_id && (int)($it['variant_id'] ?? 0) === (int)($gr->product_variant_id ?? 0)) {
+                        $ruleExistingCount += (int)$it['quantity'];
+                    }
+                }
+                $remainingQuota = $ruleQuota - $ruleExistingCount;
+                if ($remainingQuota <= 0) continue;
+
+                foreach ($pool as $rid => &$p) {
+                    if ($remainingQuota <= 0) break;
+                    if (!isset($cart['items'][$rid]) || $p['qty'] <= 0) continue;
+                    if (!$this->match($cart['items'][$rid], $gr)) continue;
+
+                    $take = min($p['qty'], $remainingQuota);
+                    $rewId = $this->generateRowId((int)$cart['items'][$rid]['product_id'], (int)($cart['items'][$rid]['variant_id'] ?? 0), (int)$promo->id, 'reward');
+
+                    if (isset($cart['items'][$rewId])) {
+                        $cart['items'][$rewId]['quantity'] += $take;
+                    } else {
+                        $cart['items'][$rewId] = $cart['items'][$rid];
+                        $cart['items'][$rewId]['row_id'] = $rewId;
+                        $cart['items'][$rewId]['quantity'] = $take;
+                        $cart['items'][$rewId]['promo_id'] = $promo->id;
+                        unset($cart['items'][$rewId]['spent_quantity']);
+                    }
+                    $this->applyBXGY($cart['items'][$rewId], $promo, $cart['items'][$rewId]['quantity']);
+                    $bxgyDisc += ($cart['items'][$rewId]['bxgy_unit_discount'] ?? 0) * $take;
+
+                    $cart['items'][$rid]['quantity'] = max(0, $cart['items'][$rid]['quantity'] - $take);
+                    $p['qty'] -= $take;
+                    $remainingQuota -= $take;
+                    if ($cart['items'][$rid]['quantity'] <= 0) unset($cart['items'][$rid]);
+                }
+                unset($p);
+            }
+
+            $buyToMark = $sessions * $buyNeeded;
+            foreach ($pool as $rid => &$p) {
+                if ($buyToMark <= 0) break;
+                if (!isset($cart['items'][$rid]) || $p['qty'] <= 0) continue;
+                if (!$p['isB']) continue;
+                $take = min($p['qty'], $buyToMark);
+                $cart['items'][$rid]['spent_quantity'] = (int)($cart['items'][$rid]['spent_quantity'] ?? 0) + $take;
+                $p['qty'] -= $take;
+                $buyToMark -= $take;
+            }
+            unset($p);
+        }
+        return (float)$bxgyDisc;
     }
 
     protected function internalInjection(array &$cart, int $productId, ?int $variantId = null, int $quantity = 1, ?int $promoId = null, bool $isGift = true): void
