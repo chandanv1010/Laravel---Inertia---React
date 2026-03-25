@@ -166,8 +166,12 @@ class CartService implements CartServiceInterface
         // 1. CLEANUP & CONSOLIDATION
         $baseItems = [];
         // 1. CLEANUP & CONSOLIDATION (Full Reset for Re-evaluation)
+        // We MUST separate User-Added items from System-Injected gifts to avoid exponential growth
         $baseItems = [];
         foreach ($cart['items'] as $it) {
+            // IGNORE items with promo_id (these was system-injected gifts from previous run)
+            if (!empty($it['promo_id'])) continue;
+
             $key = $it['product_id'] . '_' . ($it['variant_id'] ?? '0');
             if (!isset($baseItems[$key])) {
                 $baseItems[$key] = $it;
@@ -181,7 +185,7 @@ class CartService implements CartServiceInterface
             }
         }
         $consolidated = $baseItems; 
-        $cart['items'] = $consolidated;
+        $cart['items'] = $consolidated; // Now cart only contains consolidated base items
 
         // 2. BASE PRICING
         foreach ($cart['items'] as &$item) {
