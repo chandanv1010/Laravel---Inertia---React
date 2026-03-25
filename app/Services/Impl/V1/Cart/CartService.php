@@ -285,7 +285,7 @@ class CartService implements CartServiceInterface
                 $vs = app(\App\Services\Impl\V1\Voucher\VoucherService::class);
                 $v = $vs->validateVoucher($cart['voucher_code'], $cart['items'], $subAfterBXGY - $orderDisc);
                 $cart['voucher_info'] = ['id' => $v->id, 'code' => $v->code, 'type' => $v->type, 'discount_value' => (float)$v->discount_value, 'discount_type' => $v->discount_type, 'max_discount_value' => (float)$v->max_discount_value];
-                $vDist = $vs->calculateVoucherDiscount($cart['voucher_info'], $cart['items'], $subAfterBXGY - $orderDisc);
+                $vDist = $vs->calculateVoucherDiscount($cart['voucher_info'], $cart['items'], $subAfterBXGY - $orderDisc, $orderDisc);
             } catch (Exception $e) {
                 unset($cart['voucher_code'], $cart['voucher_info']);
             }

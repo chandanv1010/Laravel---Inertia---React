@@ -1128,10 +1128,15 @@ class VoucherService extends BaseCacheService implements VoucherServiceInterface
     /**
      * Tính toán số tiền giảm giá của voucher cho giỏ hàng
      */
-    public function calculateVoucherDiscount(array $voucherInfo, array $cartItems, float $subtotal): float
+    public function calculateVoucherDiscount(array $voucherInfo, array $cartItems, float $subtotal, float $orderDiscount = 0): float
     {
         $voucher = $this->repository->getModel()->where('code', $voucherInfo['code'])->first();
         if (!$voucher) return 0;
+
+        // Nếu voucher không được kết hợp với giảm giá đơn hàng, và đã có giảm giá đơn hàng
+        if (!$voucher->combine_with_order_discount && $orderDiscount > 0) {
+            return 0;
+        }
 
         $discount = 0;
         // 1. Giảm giá trên tổng đơn hoặc Freeship
@@ -1150,6 +1155,15 @@ class VoucherService extends BaseCacheService implements VoucherServiceInterface
             foreach ($cartItems as $item) {
                 // Quà tặng không được tính vào chiết khấu voucher
                 if (!empty($item['is_gift'])) continue;
+
+                // Nếu voucher không được kết hợp với giảm giá sản phẩm, bỏ qua các sản phẩm đã có giảm giá
+                if (!$voucher->combine_with_product_discount) {
+                    $retailPrice = $item['prices']['retail'] ?? 0;
+                    $currentPrice = $item['price'] ?? 0;
+                    if ($currentPrice < $retailPrice) {
+                        continue;
+                    }
+                }
 
                 $isApplicable = false;
                 if ($voucher->apply_source === 'all') {
