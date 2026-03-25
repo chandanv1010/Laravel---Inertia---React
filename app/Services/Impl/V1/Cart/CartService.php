@@ -294,14 +294,38 @@ class CartService implements CartServiceInterface
         }
 
         $cart['total_quantity'] = $finalQty;
-        $cart['total_price'] = $finalPriceCombined;
-        $cart['discount_total'] = $totalProdDisc + $bxgyDisc + $orderDisc + $vDist;
-        $cart['final_total'] = max(0, $finalPriceCombined - $orderDisc - $vDist);
+        $cart['total_price'] = $totalRetail; // Show non-gift retail as "Tạm tính" base
+        
+        // Logical math for summary: Only subtract discounts that apply to the items in "Tạm tính"
+        // (Gifts are already 0đ and shown in their own green box, so we don't subtract their "value" again here)
+        $cart['discount_total'] = $totalProdDisc + $orderDisc + $vDist;
+        $cart['final_total'] = max(0, $totalRetail - $cart['discount_total']);
+        
         $cart['summary'] = [
             'total_retail' => $totalRetail,
             'total_product_discount' => $totalProdDisc,
-            'buy_x_get_y_discount' => ['total' => $bxgyDisc, 'applied_promos' => []],
-            'final_total' => $cart['final_total']
+            'buy_x_get_y_discount' => $bxgyDisc, // We still keep the value for data/reference
+            'order_discount' => $orderDisc,
+            'voucher_discount' => $vDist,
+            'discount_total' => $cart['discount_total'],
+            'final_total' => $cart['final_total'],
+            'discount_breakdown' => [
+                [
+                    'label' => 'Giảm giá sản phẩm',
+                    'amount' => $totalProdDisc,
+                    'type' => 'product'
+                ],
+                [
+                    'label' => 'Chiết khấu đơn hàng',
+                    'amount' => $orderDisc,
+                    'type' => 'order'
+                ],
+                [
+                    'label' => 'Voucher',
+                    'amount' => $vDist,
+                    'type' => 'voucher'
+                ]
+            ]
         ];
         foreach ($cart['items'] as &$it) {
             $it['updated_at'] = microtime(true);

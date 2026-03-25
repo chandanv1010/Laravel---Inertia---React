@@ -239,10 +239,26 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
                         <span>Miễn phí</span>
                     </div>
                     {discountTotal > 0 && (
-                        <div className="flex justify-between text-sm text-gray-600">
-                            <span>Giảm giá</span>
-                            <span>-{formatPrice(discountTotal)}</span>
-                        </div>
+                        <>
+                            <div className="flex justify-between text-sm text-gray-600">
+                                <span className="flex items-center gap-1">
+                                    Giảm giá
+                                </span>
+                                <span className="text-red-600">-{formatPrice(discountTotal)}</span>
+                            </div>
+                            
+                            {/* Detailed Breakdown */}
+                            <div className="ml-4 space-y-1">
+                                {cart?.summary?.discount_breakdown?.map((item: any, idx: number) => (
+                                    item.amount > 0 && (
+                                        <div key={idx} className="flex justify-between text-[11px] text-gray-400 italic">
+                                            <span>• {item.label}</span>
+                                            <span>-{formatPrice(item.amount)}</span>
+                                        </div>
+                                    )
+                                ))}
+                            </div>
+                        </>
                     )}
                     <div className="border-t border-gray-100 pt-3 flex justify-between items-end">
                         <span className="font-bold text-gray-900 text-lg">Thành tiền</span>
