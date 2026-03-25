@@ -493,7 +493,7 @@ class WidgetService extends BaseService implements WidgetServiceInterface
             }
             
             $price = $product->retail_price ?? 0;
-            $priceData = $pricingService->calculateProductPrice($product->id, $price);
+            $priceData = $pricingService->calculateFinalPrice($product, 1);
             
             self::$requestCache['mapped_products'][$product->id] = [
                 'id' => $product->id,
@@ -502,8 +502,12 @@ class WidgetService extends BaseService implements WidgetServiceInterface
                 'image' => $product->image,
                 'price' => $price,
                 'sale_price' => $priceData['final_price'] ?? $price,
-                'discount_percentage' => $priceData['discount_percentage'] ?? 0,
-                'discount_type' => $priceData['discount_type'] ?? null,
+                'final_price' => $priceData['final_price'] ?? $price,
+                'discount_percentage' => $priceData['discount_percent'] ?? 0,
+                'discount_amount' => $priceData['discount_amount'] ?? 0,
+                'applied_promotions' => $priceData['applied_promotions'] ?? [],
+                'is_wholesale_tier' => $priceData['is_wholesale_tier'] ?? false,
+                'discount_type' => (!empty($priceData['applied_promotions'])) ? ($priceData['applied_promotions'][0]['type'] ?? null) : null,
                 'promotion_end_date' => $priceData['promotion_end_date'] ?? null,
                 'stock' => (int) $stock,
                 'category_name' => $categoryName,

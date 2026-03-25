@@ -29,6 +29,7 @@ interface ProductDiscountPromotion {
     name: string
     discount_type: 'fixed_amount' | 'percentage' | 'same_price'
     discount_value: number
+    combo_price?: number
     max_discount_value?: number
     apply_source: 'all' | 'product_variant' | 'product_catalogue'
     product_variant_ids?: number[]
@@ -94,7 +95,11 @@ export default function ProductDiscount({
     const [combineOrderDiscount, setCombineOrderDiscount] = useState(promotion?.combine_with_order_discount || false)
     const [combineProductDiscount, setCombineProductDiscount] = useState(promotion?.combine_with_product_discount || false)
     const [combineFreeShipping, setCombineFreeShipping] = useState(promotion?.combine_with_free_shipping || false)
-    const [discountValue, setDiscountValue] = useState<number>(promotion?.discount_value || 0)
+    const [discountValue, setDiscountValue] = useState<number>(
+        promotion?.discount_type === 'same_price' 
+            ? (promotion?.combo_price || promotion?.discount_value || 0) 
+            : (promotion?.discount_value || 0)
+    )
     const [maxDiscountValue, setMaxDiscountValue] = useState<number>(promotion?.max_discount_value || 0)
     const [startDate, setStartDate] = useState<Date | undefined>(() => {
         if (promotion?.start_date) {

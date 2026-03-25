@@ -141,7 +141,7 @@ class PromotionController extends BaseController
             'name' => $promotion->name,
             'type' => $promotion->type,
             'discount_type' => $promotion->discount_type,
-            'discount_value' => $promotion->discount_value ? (int) $promotion->discount_value : null,
+            'discount_value' => $promotion->discount_type === 'same_price' ? (int)($promotion->combo_price ?: $promotion->discount_value) : ($promotion->discount_value ? (int) $promotion->discount_value : null),
             'max_discount_value' => $promotion->max_discount_value ? (int) $promotion->max_discount_value : null,
             'condition_type' => $promotion->condition_type,
             'condition_value' => $promotion->condition_value ? (int) $promotion->condition_value : null,
@@ -161,16 +161,48 @@ class PromotionController extends BaseController
                 ->get()
                 ->map(function($row) {
                     if ($row->product_variant_id) {
-                        $variant = \App\Models\ProductVariant::with('product')->find($row->product_variant_id);
-                        $product = $variant ? $variant->product : \App\Models\Product::find($row->product_id);
-                        if ($variant || $product) {
+                        $variant = \App\Models\ProductVariant::with(['product.current_languages', 'product.languages'])->find($row->product_variant_id);
+                        if ($variant) {
+                            $product = $variant->product;
+                            $productName = '';
+                            if ($product) {
+                                if ($product->current_languages->isNotEmpty()) {
+                                    $productName = $product->current_languages->first()->pivot->name ?? '';
+                                } elseif ($product->languages->isNotEmpty()) {
+                                    $productName = $product->languages->first()->pivot->name ?? '';
+                                }
+                                $productName = $productName ?: ($product->name ?? '');
+                            }
+                            
+                            $displayName = $variant->name ?: $productName;
+
                             return [
-                                'id' => ($variant ? 'v' . $variant->id : 'p' . $product->id),
-                                'name' => $variant ? ($variant->name ?? ($product ? $product->name : '')) : ($product->current_language->name ?? $product->name ?? ''),
-                                'sku' => $variant ? $variant->sku : ($product->sku ?? ''),
-                                'price' => $variant ? ($variant->retail_price ?? $variant->wholesale_price ?? 0) : ($product->retail_price ?? $product->wholesale_price ?? 0),
-                                'image' => $variant ? (($product && isset($product->album) && is_array($product->album) && count($product->album) > 0) ? $product->album[0] : null) : ((isset($product->album) && is_array($product->album) && count($product->album) > 0) ? $product->album[0] : null),
+                                'id' => 'v' . $variant->id,
+                                'name' => $displayName,
+                                'sku' => $variant->sku,
+                                'price' => $variant->retail_price ?? $variant->wholesale_price ?? 0,
+                                'image' => ($product && isset($product->album) && is_array($product->album) && count($product->album) > 0) ? $product->album[0] : null,
                                 'productId' => $product ? $product->id : null,
+                            ];
+                        }
+                    } elseif ($row->product_id) {
+                        $product = \App\Models\Product::with(['current_languages', 'languages'])->find($row->product_id);
+                        if ($product) {
+                            $productName = '';
+                            if ($product->current_languages->isNotEmpty()) {
+                                $productName = $product->current_languages->first()->pivot->name ?? '';
+                            } elseif ($product->languages->isNotEmpty()) {
+                                $productName = $product->languages->first()->pivot->name ?? '';
+                            }
+                            $productName = $productName ?: ($product->name ?? '');
+
+                            return [
+                                'id' => 'p' . $product->id,
+                                'name' => $productName,
+                                'sku' => $product->sku ?? '',
+                                'price' => $product->retail_price ?? $product->wholesale_price ?? 0,
+                                'image' => (isset($product->album) && is_array($product->album) && count($product->album) > 0) ? $product->album[0] : null,
+                                'productId' => $product->id,
                             ];
                         }
                     }

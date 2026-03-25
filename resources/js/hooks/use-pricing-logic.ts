@@ -6,17 +6,37 @@ interface PricingTier {
     price: number;
 }
 
+interface AppliedPromotion {
+    id: number;
+    name: string;
+    discount: number;
+    type: string;
+    value: number;
+}
+
 interface Product {
     retail_price: number;
     wholesale_price?: number;
     pricing_tiers?: PricingTier[];
+    // From backend ProductResource
+    final_price?: number;
+    sale_price?: number;
+    original_price?: number;
+    discount_amount?: number;
+    discount_percent?: number;
+    has_discount?: boolean;
+    applied_promotions?: AppliedPromotion[];
+    promotion_id?: number | null;
+    promotion_name?: string | null;
+    promotion_type?: string | null;
 }
 
 interface Variant {
     retail_price: number;
     wholesale_price?: number;
-    // NEW: Backend-calculated fields
+    // From backend ProductResource
     final_price?: number;
+    sale_price?: number;
     original_price?: number;
     discount_percent?: number;
     discount_amount?: number;
@@ -26,6 +46,8 @@ interface Variant {
     has_tax?: boolean;
     promotion_id?: number | null;
     promotion_name?: string | null;
+    promotion_type?: string | null;
+    applied_promotions?: AppliedPromotion[];
 }
 
 interface PricingResult {
@@ -47,9 +69,10 @@ interface PricingResult {
  * Central pricing logic hook
  * 
  * Priority order:
- * 1. Wholesale pricing tiers (if exists) - overrides everything
- * 2. Variant pricing with promotions (if variant selected)
- * 3. Product retail pricing (fallback)
+ * 1. Same Price (Đồng giá) - Absolute priority
+ * 2. Wholesale pricing tiers (if exists)
+ * 3. Variant pricing with other promotions
+ * 4. Product retail pricing (fallback)
  */
 export function usePricingLogic(
     product: Product,
@@ -57,20 +80,53 @@ export function usePricingLogic(
     quantity: number = 1
 ): PricingResult {
     return useMemo(() => {
-        // 1. Check if product has wholesale tiers
-        const hasPricingTiers = product.pricing_tiers && product.pricing_tiers.length > 0;
+        // Prepare base data based on selection
+        const target = selectedVariant || product;
+        const retailPrice = target.retail_price;
+        
+        // 1. ABSOLUTE PRIORITY: Same Price (Đồng giá)
+        // Check if there is a same_price promotion applied from backend
+        const hasSamePrice = !!(target.promotion_type === 'same_price' || 
+                             target.applied_promotions?.some(p => p.type === 'same_price'));
 
-        // 2. If wholesale pricing exists, use it (overrides all promotions and variants)
+        if (hasSamePrice) {
+            const finalPrice = target.final_price ?? target.sale_price ?? retailPrice;
+            const originalPrice = target.original_price ?? retailPrice;
+            const discountAmount = target.discount_amount ?? 0;
+            const discountPercent = target.discount_percent ?? 0;
+            const displayPrice = (target as any).display_price ?? finalPrice;
+            const taxAmount = (target as any).tax_amount ?? 0;
+            const taxPercent = (target as any).tax_percent ?? 0;
+            const hasTax = (target as any).has_tax ?? false;
+
+            return {
+                displayMode: 'retail',
+                finalPrice,
+                displayPrice,
+                originalPrice: originalPrice > finalPrice ? originalPrice : null,
+                discountPercent,
+                discountAmount,
+                taxAmount,
+                taxPercent,
+                hasTax,
+                tiers: null,
+                promotionId: target.promotion_id,
+                promotionName: target.promotion_name,
+            };
+        }
+
+        // 2. PRIORITY 2: Wholesale pricing tiers
+        const hasPricingTiers = product.pricing_tiers && product.pricing_tiers.length > 0;
         if (hasPricingTiers) {
             const applicableTier = findApplicableTier(product.pricing_tiers!, quantity);
 
             return {
                 displayMode: 'wholesale',
                 finalPrice: applicableTier.price,
-                displayPrice: applicableTier.price, // No tax on wholesale
-                originalPrice: null,
-                discountPercent: 0,
-                discountAmount: 0,
+                displayPrice: applicableTier.price, // No tax on wholesale normally
+                originalPrice: retailPrice > applicableTier.price ? retailPrice : null,
+                discountPercent: retailPrice > 0 ? Math.round(((retailPrice - applicableTier.price) / retailPrice) * 100) : 0,
+                discountAmount: Math.max(0, retailPrice - applicableTier.price),
                 taxAmount: 0,
                 taxPercent: 0,
                 hasTax: false,
@@ -80,44 +136,29 @@ export function usePricingLogic(
             };
         }
 
-        // 3. Use variant pricing if variant is selected
-        if (selectedVariant) {
-            const finalPrice = selectedVariant.final_price ?? selectedVariant.retail_price;
-            const originalPrice = selectedVariant.original_price ?? selectedVariant.retail_price;
-            const discountPercent = selectedVariant.discount_percent ?? 0;
-            const displayPrice = selectedVariant.display_price ?? finalPrice;
-            const taxAmount = selectedVariant.tax_amount ?? 0;
-            const taxPercent = selectedVariant.tax_percent ?? 0;
-            const hasTax = selectedVariant.has_tax ?? false;
+        // 3. PRIORITY 3: Standard promotions (Percentage/Fixed)
+        const finalPrice = target.final_price ?? target.sale_price ?? retailPrice;
+        const originalPrice = target.original_price ?? retailPrice;
+        const discountPercent = target.discount_percent ?? 0;
+        const discountAmount = target.discount_amount ?? 0;
+        const displayPrice = (target as any).display_price ?? finalPrice;
+        const taxAmount = (target as any).tax_amount ?? 0;
+        const taxPercent = (target as any).tax_percent ?? 0;
+        const hasTax = (target as any).has_tax ?? false;
 
-            return {
-                displayMode: 'retail',
-                finalPrice,
-                displayPrice,
-                originalPrice: discountPercent > 0 ? originalPrice : null,
-                discountPercent,
-                discountAmount: selectedVariant.discount_amount ?? 0,
-                taxAmount,
-                taxPercent,
-                hasTax,
-                tiers: null,
-                promotionId: selectedVariant.promotion_id,
-                promotionName: selectedVariant.promotion_name,
-            };
-        }
-
-        // 4. Fallback to product retail pricing
         return {
             displayMode: 'retail',
-            finalPrice: product.retail_price,
-            displayPrice: product.retail_price,
-            originalPrice: null,
-            discountPercent: 0,
-            discountAmount: 0,
-            taxAmount: 0,
-            taxPercent: 0,
-            hasTax: false,
+            finalPrice,
+            displayPrice,
+            originalPrice: discountPercent > 0 ? originalPrice : null,
+            discountPercent,
+            discountAmount,
+            taxAmount,
+            taxPercent,
+            hasTax,
             tiers: null,
+            promotionId: target.promotion_id,
+            promotionName: target.promotion_name,
         };
     }, [product, selectedVariant, quantity]);
 }

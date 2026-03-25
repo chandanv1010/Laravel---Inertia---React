@@ -82,6 +82,10 @@ class ProductResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // Get pricing service
+        $pricingService = app(PromotionPricingService::class);
+        $pricingData = $pricingService->calculateFinalPrice($this->resource, 1, true);
+
         // Service layer đã load hết dữ liệu, chỉ cần lấy từ relation đã loaded
         $language = $this->relationLoaded('current_languages') && $this->current_languages->isNotEmpty()
             ? $this->current_languages->first()
@@ -138,7 +142,19 @@ class ProductResource extends JsonResource
             'meta_title' => $language?->pivot->meta_title ?? null,
             'meta_keyword' => $language?->pivot->meta_keyword ?? null,
             'meta_description' => $language?->pivot->meta_description ?? null,
-            'price' => $this->retail_price !== null ? (float) $this->retail_price : 0,
+            
+            // NEW: Unified Pricing Data for Product Level
+            'price' => (float) ($this->retail_price ?? 0),
+            'sale_price' => $pricingData['final_price'] ?? (float)($this->retail_price ?? 0),
+            'final_price' => $pricingData['final_price'] ?? (float)($this->retail_price ?? 0),
+            'original_price' => $pricingData['original_price'] ?? (float)($this->retail_price ?? 0),
+            'discount_amount' => $pricingData['discount_amount'] ?? 0,
+            'discount_percent' => $pricingData['discount_percent'] ?? 0,
+            'has_discount' => $pricingData['has_discount'] ?? false,
+            'applied_promotions' => $pricingData['applied_promotions'] ?? [],
+            'promotion_id' => $pricingData['promotion_id'] ?? null,
+            'promotion_name' => $pricingData['promotion_name'] ?? null,
+            'promotion_type' => !empty($pricingData['applied_promotions']) ? $pricingData['applied_promotions'][0]['type'] : null,
             // Creators - chỉ trả về id và name
             'creator_id' => $this->whenLoaded('creators', fn() => $this->creators->id ?? null),
             'creator_name' => $this->whenLoaded('creators', fn() => $this->creators->name ?? null),

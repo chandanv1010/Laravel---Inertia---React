@@ -614,7 +614,7 @@ class WidgetService implements WidgetServiceInterface
             $avgRating = $reviewCount > 0 ? round($publishedReviews->avg('score'), 1) : 5.0;
 
             // Calculate promotion pricing (service is reused)
-            $priceData = $pricingService->calculateProductPrice($product, $price);
+            $priceData = $pricingService->calculateFinalPrice($product, 1);
 
             // Determine badge based on promotion
             $badge = null;
@@ -630,14 +630,16 @@ class WidgetService implements WidgetServiceInterface
                 'canonical' => $canonical,
                 'image' => $product->image,
                 'category_name' => $categoryName,
-                'price' => $priceData['original_price'],
-                'original_price' => $priceData['original_price'],
-                'sale_price' => $priceData['final_price'],
-                'discount_amount' => $priceData['discount_amount'],
-                'discount_percent' => $priceData['discount_percent'],
-                'applied_promotions' => $priceData['applied_promotions'],
-                'is_combined_discount' => $priceData['is_combined'],
-                'has_discount' => $priceData['has_discount'],
+                'price' => $priceData['original_price'] ?? 0,
+                'original_price' => $priceData['original_price'] ?? 0,
+                'sale_price' => $priceData['final_price'] ?? 0,
+                'final_price' => $priceData['final_price'] ?? 0, // Added for consistency
+                'discount_amount' => $priceData['discount_amount'] ?? 0,
+                'discount_percent' => $priceData['discount_percent'] ?? 0,
+                'applied_promotions' => $priceData['applied_promotions'] ?? [],
+                'is_wholesale_tier' => $priceData['is_wholesale_tier'] ?? false, // Added flag
+                'is_combined_discount' => $priceData['is_combined'] ?? false,
+                'has_discount' => $priceData['has_discount'] ?? false,
                 'total_stock' => (int) $totalStock,
                 'sold' => 0,
                 'has_variants' => $hasVariants,

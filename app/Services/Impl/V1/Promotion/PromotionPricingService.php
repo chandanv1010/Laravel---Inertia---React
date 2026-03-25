@@ -54,7 +54,6 @@ class PromotionPricingService
     /**
      * Pre-load dữ liệu khuyến mãi cho một danh sách sản phẩm
      * Gọi hàm này trước khi xử lý nhiều sản phẩm để tránh N+1 queries
-     * Sử dụng static cache để tránh query lặp lại giữa các instances
      */
     public function preloadForProducts(array $productIds): void
     {
@@ -62,9 +61,10 @@ class PromotionPricingService
             return;
         }
 
+        // 1. Load active promotions into static cache if not already done
         if (self::$staticActivePromotionsCache === null) {
             self::$staticActivePromotionsCache = Promotion::where('publish', 2)
-                ->where('type', 'product_discount')
+                ->whereIn('type', ['product_discount', 'combo']) // MODIFIED: Include combo for same_price
                 ->expiryStatus('active')
                 ->where(function ($q) {
                     $q->where('start_date', '<=', now())
@@ -75,42 +75,70 @@ class PromotionPricingService
         }
         $this->activePromotionsCache = self::$staticActivePromotionsCache;
 
-        $newProductIds = array_diff($productIds, array_keys(self::$staticProductCatalogueCache));
+        // 2. Load associations for these products
+        $productsMissingCatalogues = array_diff($productIds, array_keys(self::$staticProductCatalogueCache));
+        $productsMissingDirectPromos = array_diff($productIds, array_keys(self::$staticDirectPromotionsCache));
 
-        if (!empty($newProductIds)) {
+        // Load missing catalogue mappings
+        if (!empty($productsMissingCatalogues)) {
             $productCatalogues = DB::table('product_catalogue_product')
-                ->whereIn('product_id', $newProductIds)
+                ->whereIn('product_id', $productsMissingCatalogues)
                 ->get()
                 ->groupBy('product_id');
 
             foreach ($productCatalogues as $productId => $catalogues) {
                 self::$staticProductCatalogueCache[$productId] = $catalogues->pluck('product_catalogue_id')->toArray();
             }
+            
+            // Ensure even products without catalogues are marked as loaded
+            foreach ($productsMissingCatalogues as $id) {
+                if (!isset(self::$staticProductCatalogueCache[$id])) {
+                    self::$staticProductCatalogueCache[$id] = [];
+                }
+            }
+        }
 
-            $directPromotions = DB::table('promotion_product_variant')
-                ->whereIn('product_id', $newProductIds)
+        // Load missing direct assignments
+        if (!empty($productsMissingDirectPromos)) {
+            $directPromos = DB::table('promotion_product_variant')
+                ->whereIn('product_id', $productsMissingDirectPromos)
                 ->get()
                 ->groupBy('product_id');
 
-            foreach ($directPromotions as $productId => $promos) {
-                self::$staticDirectPromotionsCache[$productId] = $promos->pluck('promotion_id')->toArray();
+            foreach ($directPromos as $productId => $promos) {
+                self::$staticDirectPromotionsCache[$productId] = $promos; 
             }
 
-            $newCatalogueIds = collect(self::$staticProductCatalogueCache)
-                ->only($newProductIds)
-                ->flatten()
-                ->unique()
-                ->diff(array_keys(self::$staticCataloguePromotionsCache))
-                ->toArray();
+            // Ensure even products without direct promos are marked as loaded
+            foreach ($productsMissingDirectPromos as $id) {
+                if (!isset(self::$staticDirectPromotionsCache[$id])) {
+                    self::$staticDirectPromotionsCache[$id] = collect([]);
+                }
+            }
+        }
 
-            if (!empty($newCatalogueIds)) {
-                $cataloguePromotions = DB::table('promotion_product_catalogue')
-                    ->whereIn('product_catalogue_id', $newCatalogueIds)
-                    ->get()
-                    ->groupBy('product_catalogue_id');
+        // Load missing catalogue assignments for all active catalogue IDs
+        $allCatalogueIds = collect(self::$staticProductCatalogueCache)
+            ->only($productIds)
+            ->flatten()
+            ->unique()
+            ->diff(array_keys(self::$staticCataloguePromotionsCache))
+            ->toArray();
 
-                foreach ($cataloguePromotions as $catalogueId => $promos) {
-                    self::$staticCataloguePromotionsCache[$catalogueId] = $promos->pluck('promotion_id')->toArray();
+        if (!empty($allCatalogueIds)) {
+            $cataloguePromotions = DB::table('promotion_product_catalogue')
+                ->whereIn('product_catalogue_id', $allCatalogueIds)
+                ->get()
+                ->groupBy('product_catalogue_id');
+
+            foreach ($cataloguePromotions as $catalogueId => $promos) {
+                self::$staticCataloguePromotionsCache[$catalogueId] = $promos->pluck('promotion_id')->toArray();
+            }
+            
+            // Mark empty catalogues as loaded
+            foreach ($allCatalogueIds as $cid) {
+                if (!isset(self::$staticCataloguePromotionsCache[$cid])) {
+                    self::$staticCataloguePromotionsCache[$cid] = [];
                 }
             }
         }
@@ -124,36 +152,52 @@ class PromotionPricingService
     }
 
     /**
-     * Tính toán giá cuối cùng của sản phẩm sau khi áp dụng các khuyến mãi
-     *
-     * @param Product|int $product Model sản phẩm hoặc ID
-     * @param float|null $basePrice Giá gốc (nếu null sẽ lấy retail_price của sản phẩm)
-     * @return array Kết quả tính toán giá
+     * UNIFIED PRICING ENTRY POINT (Internal helper)
      */
-    public function calculateProductPrice($product, ?float $basePrice = null): array
+    protected function calculateUnifiedPrice($entity, int $quantity = 1, bool $includeTax = false, ?int $variantId = null): array
     {
-        if (is_int($product)) {
-            $product = Product::find($product);
+        // 1. Resolve entity
+        $isProductObject = $entity instanceof \App\Models\Product;
+        $isVariantObject = $entity instanceof \App\Models\ProductVariant;
+        
+        $productModel = null;
+        $variantModel = null;
+        $actualVariantId = $variantId;
+        $actualProductId = null;
+
+        if ($isProductObject) {
+            $productModel = $entity;
+            $actualProductId = $entity->id;
+        } elseif ($isVariantObject) {
+            $variantModel = $entity;
+            $productModel = $entity->product;
+            $actualVariantId = $entity->id;
+            $actualProductId = $entity->product_id;
+        } elseif (is_int($entity)) {
+            $productModel = Product::find($entity);
+            $actualProductId = $entity;
         }
 
-        if (!$product) {
+        if (!$productModel) {
             return $this->emptyPriceResult(0);
         }
 
-        $originalPrice = $basePrice ?? $product->retail_price ?? 0;
+        $retailPrice = (float) ( ($variantModel ? $variantModel->retail_price : $productModel->retail_price) ?? 0 );
+        
+        // Fallback for variant price 0
+        if ($variantModel && $retailPrice <= 0) {
+            $retailPrice = (float) ($productModel->retail_price ?? 0);
+        }
 
-        if ($originalPrice <= 0) {
+        if ($retailPrice <= 0) {
             return $this->emptyPriceResult(0);
         }
 
-        $promotions = $this->getActivePromotionsForProduct($product->id);
-
-        if ($promotions->isEmpty()) {
-            return $this->emptyPriceResult($originalPrice);
-        }
-
-        $promotionsWithDiscount = $promotions->map(function ($promo) use ($originalPrice) {
-            $discountAmount = $this->calculateDiscountAmount($originalPrice, $promo);
+        // 2. Identify all applicable promotions
+        $promotions = $this->getActivePromotionsForProduct($actualProductId, $actualVariantId);
+        
+        $promotionsWithDiscount = $promotions->map(function ($promo) use ($retailPrice) {
+            $discountAmount = $this->calculateDiscountAmount($retailPrice, $promo);
             return [
                 'promotion' => $promo,
                 'discount_amount' => $discountAmount,
@@ -166,40 +210,111 @@ class PromotionPricingService
         $combinable = $promotionsWithDiscount->filter(fn($p) => $p['can_combine']);
         $nonCombinable = $promotionsWithDiscount->filter(fn($p) => !$p['can_combine']);
 
-        $result = $this->determineBestPricing($originalPrice, $combinable, $nonCombinable);
+        // 3. PRIORITY 1: Same Price (Đồng giá)
+        $samePrices = $nonCombinable->filter(fn($p) => $p['promotion']->discount_type === 'same_price');
+        if ($samePrices->isNotEmpty()) {
+            $bestSamePrice = $samePrices->sortByDesc('discount_amount')->first();
+            $result = $this->finalizePricingArray($this->buildPricingResult($retailPrice, $bestSamePrice['discount_amount'], [$bestSamePrice], false), $retailPrice);
+            if ($includeTax) $result = $this->addTaxToResult($result, $variantModel ?: $productModel);
+            return $result;
+        }
 
+        // 4. PRIORITY 2: Wholesale Tiers
+        $pricingTiers = $productModel->pricingTiers ?? collect([]);
+        if ($pricingTiers->isNotEmpty()) {
+            $tierPrice = $this->calculateWholesaleTierPrice($pricingTiers, $quantity);
+            if ($tierPrice !== null) {
+                $result = [
+                    'original_price' => $retailPrice,
+                    'final_price' => $tierPrice,
+                    'discount_amount' => $retailPrice - $tierPrice,
+                    'discount_percent' => $retailPrice > 0 ? round((($retailPrice - $tierPrice) / $retailPrice) * 100, 2) : 0,
+                    'applied_promotions' => [],
+                    'is_wholesale_tier' => true,
+                    'has_discount' => $tierPrice < $retailPrice,
+                    'promotion_id' => null,
+                    'promotion_name' => null,
+                ];
+                if ($includeTax) $result = $this->addTaxToResult($result, $variantModel ?: $productModel);
+                return $result;
+            }
+        }
+
+        // 5. PRIORITY 3: Standard Discounts (Combinable or best non-combinable)
+        $combinedDiscount = min($combinable->sum('discount_amount'), $retailPrice);
+        $bestSingle = $nonCombinable->sortByDesc('discount_amount')->first();
+        $bestSingleDiscount = $bestSingle['discount_amount'] ?? 0;
+
+        $finalPromoResult = null;
+        if ($combinedDiscount >= $bestSingleDiscount && $combinedDiscount > 0) {
+            $finalPromoResult = $this->buildPricingResult($retailPrice, $combinedDiscount, $combinable->toArray(), count($combinable) > 1);
+        } elseif ($bestSingleDiscount > 0) {
+            $finalPromoResult = $this->buildPricingResult($retailPrice, $bestSingleDiscount, [$bestSingle], false);
+        } else {
+            $finalPromoResult = $this->emptyPriceResult($retailPrice);
+        }
+
+        $result = $this->finalizePricingArray($finalPromoResult, $retailPrice);
+        if ($includeTax) $result = $this->addTaxToResult($result, $variantModel ?: $productModel);
         return $result;
     }
 
     /**
-     * Lấy tất cả khuyến mãi đang active áp dụng cho sản phẩm
-     * Sử dụng cache nếu đã gọi preloadForProducts
+     * API: Calculate price based ONLY on promotions (backward compatibility)
      */
-    public function getActivePromotionsForProduct(int $productId): Collection
+    public function calculateProductPrice($product, ?float $basePrice = null, ?int $variantId = null): array
     {
-        if ($this->cacheInitialized) {
-            return $this->getActivePromotionsFromCache($productId);
-        }
-
-        return $this->getActivePromotionsFromDatabase($productId);
+        // We use the unified logic but ignore wholesale by fixing quantity to 1
+        // (Wholesale tiers only apply if quantity matches, but Same Price takes precedence anyway)
+        return $this->calculateUnifiedPrice($product, 1, false, $variantId);
     }
 
     /**
-     * Lấy khuyến mãi từ cache đã preload (tối ưu)
+     * API: Calculate final price with ALL factors (Full detail / Cart)
      */
-    private function getActivePromotionsFromCache(int $productId): Collection
+    public function calculateFinalPrice($entity, int $quantity = 1, bool $includeTax = false): array
+    {
+        return $this->calculateUnifiedPrice($entity, $quantity, $includeTax);
+    }
+
+    /**
+     * Láy tất cả khuyến mãi đang active áp dụng cho sản phẩm
+     */
+    public function getActivePromotionsForProduct(int $productId, ?int $variantId = null): Collection
+    {
+        if ($this->cacheInitialized) {
+            return $this->getActivePromotionsFromCache($productId, $variantId);
+        }
+
+        return $this->getActivePromotionsFromDatabase($productId, $variantId);
+    }
+
+    /**
+     * Lấy khuyến mãi từ cache đã preload (tối ưu - KHÔNG QUERY DB LẠI)
+     */
+    private function getActivePromotionsFromCache(int $productId, ?int $variantId = null): Collection
     {
         $promoIds = collect([]);
 
-        // Case 1: Get promotions with apply_source='all'
+        // 1. apply_source = 'all'
         $allPromotions = $this->activePromotionsCache->where('apply_source', 'all');
         $promoIds = $promoIds->merge($allPromotions->pluck('id'));
 
-        // Case 2: Direct product/variant assignments
-        $directPromoIds = $this->directPromotionsCache[$productId] ?? [];
-        $promoIds = $promoIds->merge($directPromoIds);
+        // 2. Direct assignments (Using pre-loaded records to avoid DB query)
+        $directRecords = self::$staticDirectPromotionsCache[$productId] ?? collect([]);
+        foreach ($directRecords as $v) {
+            if ($variantId) {
+                if ($v->product_variant_id == $variantId || is_null($v->product_variant_id)) {
+                    $promoIds->push($v->promotion_id);
+                }
+            } else {
+                if (is_null($v->product_variant_id)) {
+                    $promoIds->push($v->promotion_id);
+                }
+            }
+        }
 
-        // Case 3: Catalogue assignments
+        // 3. Catalogue assignments
         $catalogueIds = $this->productCatalogueCache[$productId] ?? [];
         foreach ($catalogueIds as $catalogueId) {
             $cataloguePromoIds = $this->cataloguePromotionsCache[$catalogueId] ?? [];
@@ -207,7 +322,6 @@ class PromotionPricingService
         }
 
         $promoIds = $promoIds->unique();
-
         if ($promoIds->isEmpty()) {
             return collect([]);
         }
@@ -216,19 +330,12 @@ class PromotionPricingService
     }
 
     /**
-     * Lấy khuyến mãi từ database (không cache) - CHỈ 1 sản phẩm
+     * Lấy khuyến mãi từ database (không cache)
      */
-    private function getActivePromotionsFromDatabase(int $productId): Collection
+    private function getActivePromotionsFromDatabase(int $productId, ?int $variantId = null): Collection
     {
-        $product = \App\Models\Product::find($productId);
-
-        if (!$product) {
-            return collect([]);
-        }
-
-        // CRITICAL FIX: Load active promotions including apply_source='all'
         $activePromotions = Promotion::where('publish', 2)
-            ->where('type', 'product_discount')
+            ->whereIn('type', ['product_discount', 'combo']) // MODIFIED: Include combo
             ->expiryStatus('active')
             ->where(function ($q) {
                 $q->where('start_date', '<=', now())
@@ -239,17 +346,23 @@ class PromotionPricingService
         $applicablePromoIds = collect([]);
 
         foreach ($activePromotions as $promo) {
-            // Case 1: apply_source = 'all' → applies to EVERYTHING
             if ($promo->apply_source === 'all') {
                 $applicablePromoIds->push($promo->id);
                 continue;
             }
 
-            // Case 2: Direct product/variant assignment
             if ($promo->apply_source === 'product_variant') {
                 $hasDirectAssignment = DB::table('promotion_product_variant')
                     ->where('promotion_id', $promo->id)
                     ->where('product_id', $productId)
+                    ->where(function($q) use ($variantId) {
+                        if ($variantId) {
+                            $q->where('product_variant_id', $variantId)
+                              ->orWhereNull('product_variant_id');
+                        } else {
+                            $q->whereNull('product_variant_id');
+                        }
+                    })
                     ->exists();
 
                 if ($hasDirectAssignment) {
@@ -258,7 +371,6 @@ class PromotionPricingService
                 }
             }
 
-            // Case 3: Product catalogue assignment
             if ($promo->apply_source === 'product_catalogue') {
                 $productCatalogueIds = DB::table('product_catalogue_product')
                     ->where('product_id', $productId)
@@ -280,6 +392,7 @@ class PromotionPricingService
         return $activePromotions->whereIn('id', $applicablePromoIds->unique())->values();
     }
 
+
     /**
      * Tính toán số tiền giảm giá cho một chương trình khuyến mãi cụ thể
      */
@@ -297,152 +410,18 @@ class PromotionPricingService
         } elseif ($promotion->discount_type === 'fixed_amount') {
             $discountAmount = $promotion->discount_value;
         } elseif ($promotion->discount_type === 'same_price') {
-            // CRITICAL FIX: Use combo_price (correct field name), not discount_value
-            $targetPrice = (float) ($promotion->combo_price ?? 0);
+            // Use combo_price if set, otherwise fallback to discount_value (Product-level same_price usually uses discount_value)
+            $targetPrice = (float) (($promotion->combo_price > 0) ? $promotion->combo_price : ($promotion->discount_value ?? 0));
 
             // Only apply if target price is lower than current price
             if ($targetPrice > 0 && $targetPrice < $price) {
                 $discountAmount = $price - $targetPrice;
             } else {
-                // Invalid same_price promotion - target price too high or zero
                 $discountAmount = 0;
             }
         }
 
         return min(max($discountAmount, 0), $price);
-    }
-
-    /**
-     * Xác định phương án giá tốt nhất giữa gộp khuyến mãi và khuyến mãi độc lập
-     */
-    /* 
-    private function determineBestPricing(float $originalPrice, Collection $combinable, Collection $nonCombinable): array
-    {
-        // PRIORITY 1: Check for same_price promotions FIRST
-        // If exists, use immediately - same_price has ABSOLUTE priority
-        $samePricePromo = $nonCombinable->first(function ($promo) {
-            return $promo['promotion']->discount_type === 'same_price';
-        });
-
-        if ($samePricePromo) {
-            $discount = $samePricePromo['discount_amount'];
-            $finalPrice = max($originalPrice - $discount, 0);
-            $discountPercent = $originalPrice > 0
-                ? round(($discount / $originalPrice) * 100, 0)
-                : 0;
-
-            return [
-                'original_price' => $originalPrice,
-                'final_price' => $finalPrice,
-                'discount_amount' => $discount,
-                'discount_percent' => (int) $discountPercent,
-                'applied_promotions' => [[
-                    'id' => $samePricePromo['promotion']->id,
-                    'name' => $samePricePromo['promotion']->name,
-                    'discount' => $discount,
-                    'type' => 'same_price',
-                    'value' => $samePricePromo['promotion']->combo_price,
-                ]],
-                'is_combined' => false,
-                'has_discount' => $discount > 0,
-            ];
-        }
-
-        // PRIORITY 2: Compare combinable vs non-combinable (percentage/fixed only)
-        $combinedDiscount = 0;
-        $combinedPromos = [];
-
-        foreach ($combinable as $promo) {
-            $combinedDiscount += $promo['discount_amount'];
-            $combinedPromos[] = [
-                'id' => $promo['promotion']->id,
-                'name' => $promo['promotion']->name,
-                'discount' => $promo['discount_amount'],
-                'type' => $promo['promotion']->discount_type,
-                'value' => $promo['promotion']->discount_value,
-            ];
-        }
-
-        $bestNonCombinable = null;
-        $bestNonCombinableDiscount = 0;
-
-        if ($nonCombinable->isNotEmpty()) {
-            $sortedNonCombinable = $nonCombinable->sortBy([
-                ['discount_amount', 'desc'],
-                ['end_date', 'asc'],
-            ])->values();
-
-            $bestNonCombinable = $sortedNonCombinable->first();
-            $bestNonCombinableDiscount = $bestNonCombinable['discount_amount'];
-        }
-
-        $combinedDiscount = min($combinedDiscount, $originalPrice);
-
-        $useCombined = false;
-        $appliedPromotions = [];
-        $totalDiscount = 0;
-
-        if ($combinedDiscount >= $bestNonCombinableDiscount) {
-            $useCombined = true;
-            $totalDiscount = $combinedDiscount;
-            $appliedPromotions = $combinedPromos;
-        } else {
-            $useCombined = false;
-            $totalDiscount = $bestNonCombinableDiscount;
-            $appliedPromotions = [[
-                'id' => $bestNonCombinable['promotion']->id,
-                'name' => $bestNonCombinable['promotion']->name,
-                'discount' => $bestNonCombinableDiscount,
-                'type' => $bestNonCombinable['promotion']->discount_type,
-                'value' => $bestNonCombinable['promotion']->discount_value,
-            ]];
-        }
-
-        if (empty($appliedPromotions)) {
-            return $this->emptyPriceResult($originalPrice);
-        }
-
-        $finalPrice = max($originalPrice - $totalDiscount, 0);
-        $discountPercent = $originalPrice > 0
-            ? round(($totalDiscount / $originalPrice) * 100, 0)
-            : 0;
-
-        return [
-            'original_price' => $originalPrice,
-            'final_price' => $finalPrice,
-            'discount_amount' => $totalDiscount,
-            'discount_percent' => (int) $discountPercent,
-            'applied_promotions' => $appliedPromotions,
-            'is_combined' => $useCombined && count($appliedPromotions) > 1,
-            'has_discount' => $totalDiscount > 0,
-        ];
-    }
-    */
-
-    /**
-     * [NEW] Xác định phương án giá tốt nhất (Version 2)
-     * Tối ưu hóa so sánh giữa khuyến mãi cộng dồn và khuyến mãi độc lập cho mức sản phẩm.
-     */
-    private function determineBestPricing(float $originalPrice, Collection $combinable, Collection $nonCombinable): array
-    {
-        // 1. Ưu tiên Same Price (Đồng giá)
-        $samePrice = $nonCombinable->first(fn($p) => $p['promotion']->discount_type === 'same_price');
-        if ($samePrice) {
-            return $this->buildPricingResult($originalPrice, $samePrice['discount_amount'], [$samePrice], false);
-        }
-
-        // 2. So sánh Gộp vs Độc lập
-        $combinedDiscount = min($combinable->sum('discount_amount'), $originalPrice);
-        $bestSingle = $nonCombinable->sortByDesc('discount_amount')->first();
-        $bestSingleDiscount = $bestSingle['discount_amount'] ?? 0;
-
-        if ($combinedDiscount >= $bestSingleDiscount && $combinedDiscount > 0) {
-            return $this->buildPricingResult($originalPrice, $combinedDiscount, $combinable->toArray(), count($combinable) > 1);
-        } elseif ($bestSingleDiscount > 0) {
-            return $this->buildPricingResult($originalPrice, $bestSingleDiscount, [$bestSingle], false);
-        }
-
-        return $this->emptyPriceResult($originalPrice);
     }
 
     /**
@@ -460,7 +439,7 @@ class PromotionPricingService
                 'name' => $promo->name,
                 'discount' => $pDiscount,
                 'type' => $promo->discount_type,
-                'value' => $promo->discount_type === 'same_price' ? $promo->combo_price : $promo->discount_value,
+                'value' => $promo->discount_type === 'same_price' ? (($promo->combo_price > 0) ? $promo->combo_price : $promo->discount_value) : $promo->discount_value,
             ];
         }, $promos);
 
@@ -476,157 +455,57 @@ class PromotionPricingService
     }
 
     /**
-     * Lấy các chương trình khuyến mãi tự động áp dụng cho TỔNG đơn hàng
+     * Calculate price from wholesale pricing tiers based on quantity
      */
-    public function getActiveOrderPromotions(): Collection
+    private function calculateWholesaleTierPrice($tiers, int $quantity): ?float
     {
-        return Promotion::where('publish', 2)
-            ->where('type', 'order_discount')
-            ->expiryStatus('active')
-            ->where(function ($q) {
-                $q->where('start_date', '<=', now())
-                    ->orWhereNull('start_date');
-            })
-            ->orderBy('order', 'asc')
-            ->get();
-    }
-
-    /**
-     * Tính toán giá trị giảm giá cho một khuyến mãi đơn hàng cụ thể
-     */
-    public function calculateOrderPromotionDiscount(float $subtotal, Promotion $promotion): float
-    {
-        // Kiểm tra điều kiện đơn hàng tối thiểu
-        if ($promotion->condition_type === 'min_order_amount' && $subtotal < $promotion->condition_value) {
-            return 0;
-        }
-
-        $discount = 0;
-        if ($promotion->discount_type === 'percentage') {
-            $discount = $subtotal * ($promotion->discount_value / 100);
-            if ($promotion->max_discount_value > 0) {
-                $discount = min($discount, $promotion->max_discount_value);
-            }
-        } elseif ($promotion->discount_type === 'fixed_amount') {
-            $discount = $promotion->discount_value;
-        }
-
-        return min(max($discount, 0), $subtotal);
-    }
-
-    /**
-     * UNIFIED PRICING METHOD
-     * Calculate final price with ALL factors: promotions, tax, wholesale tiers
-     * Supports both Product and ProductVariant
-     * 
-     * @param Product|ProductVariant $entity 
-     * @param int $quantity For wholesale tier calculation
-     * @param bool $includeTax Whether to add tax to final price
-     * @return array Complete pricing breakdown
-     */
-    public function calculateFinalPrice($entity, int $quantity = 1, bool $includeTax = false): array
-    {
-        // Extract base data
-        $isProduct = $entity instanceof \App\Models\Product;
-        $isVariant = $entity instanceof \App\Models\ProductVariant;
-
-        if (!$isProduct && !$isVariant) {
-            return $this->emptyPriceResult(0);
-        }
-
-        $retailPrice = (float) ($entity->retail_price ?? 0);
-        $wholesalePrice = (float) ($entity->wholesale_price ?? 0);
-
-        // CRITICAL FIX: If variant price is 0, fallback to parent product price
-        if ($isVariant && $retailPrice <= 0) {
-            $product = $entity->product;
-            if ($product) {
-                $retailPrice = (float) ($product->retail_price ?? 0);
-                $wholesalePrice = (float) ($product->wholesale_price ?? 0);
-            }
-        }
-
-        if ($retailPrice <= 0) {
-            return $this->emptyPriceResult(0);
-        }
-
-        // PRIORITY 1: Check wholesale pricing tiers (Product or Variant's parent product)
-        $product = $isVariant ? $entity->product : $entity;
-        if ($product && $product->pricingTiers && $product->pricingTiers->isNotEmpty()) {
-            $tierPrice = $this->calculateWholesaleTierPrice($product->pricingTiers, $quantity);
-
-            // If tierPrice is NULL, it means no tier matched (quantity too low), so fall back to retail/promotion
-            if ($tierPrice !== null) {
-                $result = [
-                    'original_price' => $retailPrice,
-                    'final_price' => $tierPrice,
-                    'discount_amount' => $retailPrice - $tierPrice,
-                    'discount_percent' => $retailPrice > 0 ? round((($retailPrice - $tierPrice) / $retailPrice) * 100, 2) : 0,
-                    'applied_promotions' => [],
-                    'is_wholesale_tier' => true,
-                    'has_discount' => $tierPrice < $retailPrice,
-                    'promotion_id' => null,
-                    'promotion_name' => null,
-                ];
-
-                // Add tax if enabled
-                if ($includeTax) {
-                    $result = $this->addTaxToResult($result, $entity);
+        $applicableTier = null;
+        
+        foreach ($tiers as $tier) {
+            $min = (int)($tier->min_quantity ?? 0);
+            $max = $tier->max_quantity !== null ? (int)$tier->max_quantity : null;
+            
+            if ($quantity >= $min) {
+                if ($max === null || $quantity <= $max) {
+                    if ($applicableTier === null || $min >= (int)$applicableTier->min_quantity) {
+                        $applicableTier = $tier;
+                    }
                 }
-
-                return $result;
             }
         }
 
-        // PRIORITY 2: Calculate promotion pricing
-        if ($isProduct) {
-            $promotionResult = $this->calculateProductPrice($entity, $retailPrice);
-        } else {
-            // For variant, get promotions via parent product
-            $product = $entity->product;
-            $promotionResult = $product ? $this->calculateProductPrice($product, $retailPrice) : $this->emptyPriceResult($retailPrice);
-        }
+        return $applicableTier ? (float) $applicableTier->price : null;
+    }
 
-        // Normalize promotion result
-        $result = [
+    /**
+     * Trả về kết quả giá trống
+     */
+    private function emptyPriceResult(float $price): array
+    {
+        return [
+            'original_price' => $price,
+            'final_price' => $price,
+            'discount_amount' => 0,
+            'discount_percent' => 0,
+            'applied_promotions' => [],
+            'is_combined' => false,
+            'has_discount' => false,
+        ];
+    }
+    private function finalizePricingArray(array $promotionResult, float $retailPrice): array
+    {
+        return [
             'original_price' => $promotionResult['original_price'] ?? $retailPrice,
             'final_price' => $promotionResult['final_price'] ?? $retailPrice,
             'discount_amount' => $promotionResult['discount_amount'] ?? 0,
             'discount_percent' => $promotionResult['discount_percent'] ?? 0,
             'applied_promotions' => $promotionResult['applied_promotions'] ?? [],
-            'is_wholesale_tier' => false,
+            'is_wholesale_tier' => $promotionResult['is_wholesale_tier'] ?? false,
+            'is_combined' => $promotionResult['is_combined'] ?? false,
             'has_discount' => ($promotionResult['discount_amount'] ?? 0) > 0,
             'promotion_id' => !empty($promotionResult['applied_promotions']) ? $promotionResult['applied_promotions'][0]['id'] ?? null : null,
             'promotion_name' => !empty($promotionResult['applied_promotions']) ? $promotionResult['applied_promotions'][0]['name'] ?? null : null,
         ];
-
-        // Add tax if enabled
-        if ($includeTax) {
-            $result = $this->addTaxToResult($result, $entity);
-        }
-
-        return $result;
-    }
-
-    /**
-     * Calculate price from wholesale pricing tiers based on quantity
-     */
-    private function calculateWholesaleTierPrice($tiers, int $quantity): ?float
-    {
-        $sortedTiers = $tiers->sortBy('min_quantity');
-        $applicableTier = null;
-
-        foreach ($sortedTiers as $tier) {
-            if ($quantity >= $tier->min_quantity) {
-                // Check if within max_quantity range (null = unlimited)
-                if ($tier->max_quantity === null || $quantity <= $tier->max_quantity) {
-                    $applicableTier = $tier;
-                }
-            }
-        }
-
-        // Return the price if a tier matched, otherwise return null (let caller fall back to RetailPrice)
-        return $applicableTier ? (float) $applicableTier->price : null;
     }
 
     /**
@@ -762,18 +641,45 @@ class PromotionPricingService
     }
 
     /**
-     * Trả về kết quả giá mặc định (không giảm giá)
+     * Lấy danh sách các chương trình khuyến mãi trên tổng đơn hàng đang active
      */
-    private function emptyPriceResult(float $originalPrice): array
+    public function getActiveOrderPromotions(): Collection
     {
-        return [
-            'original_price' => $originalPrice,
-            'final_price' => $originalPrice,
-            'discount_amount' => 0,
-            'discount_percent' => 0,
-            'applied_promotions' => [],
-            'is_combined' => false,
-            'has_discount' => false,
-        ];
+        return Promotion::where('publish', 2)
+            ->where('type', 'order_discount')
+            ->expiryStatus('active')
+            ->where(function ($q) {
+                $q->where('start_date', '<=', now())
+                    ->orWhereNull('start_date');
+            })
+            ->get();
+    }
+
+    /**
+     * Tính toán số tiền giảm giá cho khuyến mãi đơn hàng
+     */
+    public function calculateOrderPromotionDiscount(float $amount, Promotion $promotion): float
+    {
+        // Kiểm tra điều kiện đơn hàng (nếu có)
+        // Hiện tại logic đơn giản là kiểm tra giá trị tối thiểu
+        if ($promotion->condition_type === 'min_order_amount') {
+            if ($amount < (float)$promotion->condition_value) {
+                return 0;
+            }
+        }
+
+        $discountAmount = 0;
+        if ($promotion->discount_type === 'percentage') {
+            $discountAmount = $amount * ($promotion->discount_value / 100);
+            
+            $maxDiscount = (float) $promotion->max_discount_value;
+            if ($maxDiscount > 0 && $discountAmount > $maxDiscount) {
+                $discountAmount = $maxDiscount;
+            }
+        } elseif ($promotion->discount_type === 'fixed_amount') {
+            $discountAmount = (float) $promotion->discount_value;
+        }
+
+        return min(max($discountAmount, 0), $amount);
     }
 }
