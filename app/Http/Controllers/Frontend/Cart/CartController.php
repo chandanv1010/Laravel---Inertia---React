@@ -26,14 +26,17 @@ class CartController extends Controller
         ]);
     }
 
-    public function index(): JsonResponse
+    public function index(Request $request)
     {
         $this->cartService->recalculate();
         $cart = $this->cartService->get();
-        return response()->json([
-            'status' => 'success',
-            'data' => $cart
-        ]);
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => 'success',
+                'data' => $cart
+            ]);
+        }
+        return redirect()->route('cart.page');
     }
 
     public function store(Request $request): JsonResponse

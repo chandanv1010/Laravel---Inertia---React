@@ -81,6 +81,32 @@ class ProductVariant extends Model
         'expired_warning_days' => 'integer',
         'album' => 'json'
     ];
+    public function getVariantNameAttribute(): string
+    {
+        $attributes = $this->attributes()->with(['attribute_catalogues' => function($query) {
+            $query->whereHas('current_languages');
+        }])->get();
+
+        if ($attributes->isEmpty()) {
+            return $this->product->name ?? '';
+        }
+
+        $parts = [];
+        foreach ($attributes as $attribute) {
+            $catalogue = $attribute->attribute_catalogues->first();
+            $catalogueName = $catalogue ? ($catalogue->current_languages->first()->pivot->name ?? $catalogue->name) : '';
+            $attributeName = $attribute->current_languages->first()->pivot->name ?? $attribute->name;
+            
+            if ($catalogueName) {
+                $parts[] = "{$catalogueName}: {$attributeName}";
+            } else {
+                $parts[] = $attributeName;
+            }
+        }
+
+        $baseName = $this->product->name ?? '';
+        return $baseName . ' - ' . implode(', ', $parts);
+    }
 
 }
 
