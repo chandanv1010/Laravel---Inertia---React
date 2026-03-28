@@ -163,14 +163,10 @@ class CartService implements CartServiceInterface
         $this->isSaving = true;
         try {
 
-        // 1. CLEANUP & CONSOLIDATION
-        $baseItems = [];
-        // 1. CLEANUP & CONSOLIDATION (Full Reset for Re-evaluation)
-        // We MUST separate User-Added items from System-Injected gifts to avoid exponential growth
         $baseItems = [];
         foreach ($cart['items'] as $it) {
-            // Chỉ bỏ qua nếu là QUÀ TẶNG được tự động tiêm vào (Inject)
-            // Còn nếu là REWARD từ việc tách sản phẩm có sẵn (split), ta PHẢI gộp lại để tính toán tiếp
+            // NẾU LÀ REWARD (Tách ra từ hàng mua): Gộp ngược lại vào base để tính toán lại toàn bộ.
+            // NẾU LÀ GIÀY TẶNG (Tiêm vào): Xóa bỏ (không gộp) để BXGY tiêm lại định mức mới chính xác.
             if (!empty($it['promo_id']) && empty($it['is_split'])) continue;
 
             $key = $it['product_id'] . '_' . ($it['variant_id'] ?? '0');
@@ -185,8 +181,7 @@ class CartService implements CartServiceInterface
                 unset($baseItems[$key]['spent_quantity']);
             }
         }
-        $consolidated = $baseItems; 
-        $cart['items'] = $consolidated; // Now cart only contains consolidated base items
+        $cart['items'] = $baseItems;
 
         // 2. BASE PRICING
         foreach ($cart['items'] as &$item) {
@@ -271,7 +266,7 @@ class CartService implements CartServiceInterface
             $orderDisc = $stackDisc;
         } else {
             \Illuminate\Support\Facades\Log::info("  [ORDER BRANCH] Using Best Single (Reset)");
-            $cart['items'] = $consolidated; 
+            $cart['items'] = $baseItems; 
             foreach ($cart['items'] as &$it) {
                 $it['price'] = $it['prices']['retail'];
                 $it['product_promotions'] = [];
@@ -371,7 +366,8 @@ class CartService implements CartServiceInterface
             $pool = [];
             foreach ($cart['items'] as $rid => $it) {
                 if (!empty($it['promo_id'])) continue; 
-                $avail = (int)$it['quantity'] - (int)($it['spent_quantity'] ?? 0);
+                // Logic Hợp nhất (Merging): Một sản phẩm mua có thể kích hoạt nhiều chương trình (không dùng spent_quantity).
+                $avail = (int)$it['quantity'];
                 if ($avail <= 0) continue;
 
                 $isB = false; foreach ($buyRules as $r) if ($this->match($it, $r)) { $isB = true; break; }
@@ -420,7 +416,7 @@ class CartService implements CartServiceInterface
             $pool = [];
             foreach ($cart['items'] as $rid => $it) {
                 if (!empty($it['promo_id'])) continue;
-                $avail = (int)$it['quantity'] - (int)($it['spent_quantity'] ?? 0);
+                $avail = (int)$it['quantity'];
                 if ($avail <= 0) continue;
                 $isB = false; foreach ($buyRules as $r) if ($this->match($it, $r)) { $isB = true; break; }
                 $isG = false; foreach ($getRules as $r) if ($this->match($it, $r)) { $isG = true; break; }
@@ -497,6 +493,19 @@ class CartService implements CartServiceInterface
                     }
                 }
                 $remainingQuota = $ruleQuota - $ruleExistingCount;
+                if ($remainingQuota < 0) {
+                    // Thu hồi quà tặng dư thừa (Clean up excess split rewards)
+                    $toRemove = abs($remainingQuota);
+                    foreach ($cart['items'] as $grid => &$it) {
+                        if ($toRemove <= 0) break;
+                        if (($it['promo_id'] ?? null) == $promo->id && (int)$it['product_id'] === (int)$gr->product_id && (int)($it['variant_id'] ?? 0) === (int)($gr->product_variant_id ?? 0)) {
+                            $rem = min($it['quantity'], $toRemove);
+                            $it['quantity'] -= $rem;
+                            $toRemove -= $rem;
+                            if ($it['quantity'] <= 0) unset($cart['items'][$grid]);
+                        }
+                    }
+                }
                 if ($remainingQuota <= 0) continue;
 
                 $buyQuotaToPreserve = $ruleSessions * $buyNeeded;
@@ -538,16 +547,7 @@ class CartService implements CartServiceInterface
             }
 
             // Đánh dấu số lượng hàng Mua đã tiêu tốn cho phiên cao nhất đạt được
-            $buyToMark = $maxOverallSessions * $buyNeeded;
-            foreach ($pool as $rid => &$p) {
-                if ($buyToMark <= 0) break;
-                if (!isset($cart['items'][$rid]) || $p['qty'] <= 0) continue;
-                if (!$p['isB']) continue;
-                $take = min($p['qty'], $buyToMark);
-                $cart['items'][$rid]['spent_quantity'] = (int)($cart['items'][$rid]['spent_quantity'] ?? 0) + $take;
-                $p['qty'] -= $take;
-                $buyToMark -= $take;
-            }
+            // Hết lượt xử lý promo này. Không mark spent_quantity để cho phép promo tiếp theo sử dụng chung pool.
             unset($p);
         }
         return (float)$bxgyDisc;
