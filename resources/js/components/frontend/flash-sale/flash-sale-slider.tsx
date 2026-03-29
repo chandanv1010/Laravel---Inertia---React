@@ -90,11 +90,11 @@ export default function FlashSaleSlider({
                 </div>
 
                 {/* Image - Linked */}
-                <Link href={productUrl} className="relative w-full aspect-square mb-3 flex items-center justify-center">
+                <Link href={productUrl} className="relative w-full aspect-[3/4] mb-3 overflow-hidden rounded-lg">
                     <img
                         src={product.image || '/images/placeholder.png'}
                         alt={product.name}
-                        className="w-full h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                 </Link>
 

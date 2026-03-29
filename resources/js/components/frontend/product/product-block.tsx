@@ -57,11 +57,11 @@ export default function ProductBlock({ title, products, className = '' }: Produc
                 className="flex items-start gap-4 group py-1"
             >
                 {/* Image - Size 85x85, ensure contain */}
-                <div className="w-[85px] h-[85px] flex-shrink-0 rounded-lg overflow-hidden bg-white border border-gray-100 p-1 flex items-center justify-center">
+                <div className="w-[85px] aspect-[3/4] flex-shrink-0 rounded-lg overflow-hidden bg-white border border-gray-100 flex items-center justify-center">
                     <img
                         src={product.image || '/images/placeholder.png'}
                         alt={product.name}
-                        className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                 </div>
 

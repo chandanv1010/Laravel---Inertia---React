@@ -42,19 +42,24 @@ class CartController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'product_id' => 'required|integer|exists:products,id',
+            'product_id' => 'required_without:is_combo|integer|exists:products,id',
             'variant_id' => 'nullable|integer|exists:product_variants,id',
             'quantity' => 'required|integer|min:1',
-            'promo_id' => 'nullable|integer|exists:promotions,id'
+            'promo_id' => 'nullable|integer|exists:promotions,id',
+            'is_combo' => 'nullable|boolean'
         ]);
 
         try {
-            $cart = $this->cartService->add(
-                $request->input('product_id'),
-                $request->input('variant_id'),
-                $request->input('quantity'),
-                $request->input('promo_id')
-            );
+            if ($request->boolean('is_combo') && $request->filled('promo_id')) {
+                $cart = $this->cartService->addCombo($request->input('promo_id'));
+            } else {
+                $cart = $this->cartService->add(
+                    $request->input('product_id'),
+                    $request->input('variant_id'),
+                    $request->input('quantity'),
+                    $request->input('promo_id')
+                );
+            }
 
             return response()->json([
                 'status' => 'success',

@@ -146,11 +146,11 @@ export default function ProductItemDailyBestSell({ product, className = '' }: Pr
 
 
                 {/* Image Container */}
-                <Link href={productUrl} className={`w-full aspect-square flex items-center justify-center ${product.promotion_end_date ? 'mb-3' : ''}`}>
+                <Link href={productUrl} className={`w-full aspect-[3/4] bg-gray-50 overflow-hidden relative ${product.promotion_end_date ? 'mb-3' : ''}`}>
                     <img
                         src={product.image || '/images/placeholder.png'}
                         alt={product.name}
-                        className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                 </Link>
             </div>

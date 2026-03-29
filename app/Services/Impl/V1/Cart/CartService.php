@@ -63,6 +63,69 @@ class CartService implements CartServiceInterface
         return $this->get();
     }
 
+    public function addCombo(int $comboId): array
+    {
+        $combo = \App\Models\Promotion::with('combo_items')->find($comboId);
+        if (!$combo || $combo->type !== 'combo') {
+            throw new Exception('Gói Combo không tồn tại hoặc đã hết hạn');
+        }
+
+        $cart = $this->get();
+        $groupId = "cb_{$comboId}"; // Deterministic group for this combo type
+        
+        $items = $combo->combo_items;
+        $totalItems = count($items);
+        $comboPrice = (float)$combo->combo_price;
+        
+        foreach ($items as $index => $item) {
+            // Phân bổ giá: Gán toàn bộ giá combo vào sản phẩm đầu tiên, các sản phẩm sau giá 0
+            // Đây là cách đơn giản để đảm bảo SUM(price) = comboPrice
+            $pricePerItem = ($index === 0) ? $comboPrice : 0;
+            
+            $productId = $item->product_id;
+            $variantId = $item->product_variant_id;
+            $quantity = $item->quantity;
+            
+            $product = $this->productService->show($productId);
+            $variant = $variantId ? $product->variants->where('id', $variantId)->first() : null;
+            
+            $rowId = "combo_{$comboId}_{$groupId}_{$productId}_" . ($variantId ?: '0');
+            $translatedName = $product->current_languages->first()?->pivot?->name ?? $product->name;
+            $cartName = $variant ? $variant->variant_name : $translatedName;
+            $cartImage = $variant ? ($variant->image ?? $product->image) : $product->image;
+
+            if (isset($cart['items'][$rowId])) {
+                $cart['items'][$rowId]['quantity'] += $quantity;
+            } else {
+                $cart['items'][$rowId] = [
+                    'row_id' => $rowId,
+                    'product_id' => $productId,
+                    'variant_id' => $variantId,
+                    'name' => $cartName,
+                    'image' => $cartImage,
+                    'price' => $pricePerItem,
+                    'original_price' => $pricePerItem, // Bảo vệ giá: Retail = Promo for combo
+                    'quantity' => $quantity,
+                    'promo_id' => $comboId,
+                    'is_gift' => false,
+                    'is_combo_item' => true,
+                    'combo_group_id' => $groupId,
+                    'combo_name' => $combo->name,
+                    'combo_image' => $combo->image,
+                    'updated_at' => now(),
+                    'prices' => [
+                        'retail' => $pricePerItem, // Bảo vệ giá: Retail = Promo for combo
+                        'promo' => $pricePerItem
+                    ]
+                ];
+            }
+        }
+
+        Session::put($this->sessionKey, $cart);
+        $this->save($cart);
+        return $this->get();
+    }
+
     protected function internalAdd(int $productId, ?int $variantId = null, int $quantity = 1, ?int $promoId = null, bool $isGift = false): void
     {
         $cart = $this->get();
@@ -123,14 +186,29 @@ class CartService implements CartServiceInterface
     public function update(string $rowId, int $quantity): array
     {
         $cart = $this->get();
+        
+        if (strpos($rowId, 'group_') === 0) {
+            $groupId = str_replace('group_', '', $rowId);
+            foreach ($cart['items'] as &$item) {
+                if (($item['combo_group_id'] ?? null) === $groupId) {
+                    if ($quantity <= 0) {
+                        unset($cart['items'][$item['row_id']]);
+                    } else {
+                        $item['quantity'] = $quantity;
+                        $item['updated_at'] = now();
+                    }
+                }
+            }
+            $this->save($cart);
+            return $this->get();
+        }
+
         if (isset($cart['items'][$rowId])) {
             if ($quantity <= 0) {
                 unset($cart['items'][$rowId]);
             } else {
-                // Với logic consolidation mới (gộp cả reward có is_split), 
-                // qty ở đây đại diện cho số lượng buy row mới. 
-                // save() sẽ tự động gộp phần thưởng cũ và tính lại từ đầu.
                 $cart['items'][$rowId]['quantity'] = $quantity;
+                $cart['items'][$rowId]['updated_at'] = now();
             }
             $this->save($cart);
         }
@@ -140,6 +218,18 @@ class CartService implements CartServiceInterface
     public function remove(string $rowId): array
     {
         $cart = $this->get();
+        
+        if (strpos($rowId, 'group_') === 0) {
+            $groupId = str_replace('group_', '', $rowId);
+            foreach ($cart['items'] as $id => $item) {
+                if (($item['combo_group_id'] ?? null) === $groupId) {
+                    unset($cart['items'][$id]);
+                }
+            }
+            $this->save($cart);
+            return $this->get();
+        }
+
         if (isset($cart['items'][$rowId])) {
             unset($cart['items'][$rowId]);
             $this->save($cart);
@@ -167,7 +257,14 @@ class CartService implements CartServiceInterface
         foreach ($cart['items'] as $it) {
             // NẾU LÀ REWARD (Tách ra từ hàng mua): Gộp ngược lại vào base để tính toán lại toàn bộ.
             // NẾU LÀ GIÀY TẶNG (Tiêm vào): Xóa bỏ (không gộp) để BXGY tiêm lại định mức mới chính xác.
-            if (!empty($it['promo_id']) && empty($it['is_split'])) continue;
+            // NẾU LÀ COMBO ITEM: GIỮ NGUYÊN (Không gộp, không xóa) vì giá đã được fix.
+            if (!empty($it['promo_id'])) {
+                if (!empty($it['is_combo_item'])) {
+                    $baseItems[$it['row_id']] = $it;
+                    continue;
+                }
+                if (empty($it['is_split'])) continue;
+            }
 
             $key = $it['product_id'] . '_' . ($it['variant_id'] ?? '0');
             if (!isset($baseItems[$key])) {
@@ -185,7 +282,7 @@ class CartService implements CartServiceInterface
 
         // 2. BASE PRICING
         foreach ($cart['items'] as &$item) {
-            if (!empty($item['is_gift']) || !empty($item['promo_id'])) continue;
+            if (!empty($item['is_gift']) || !empty($item['promo_id']) || !empty($item['is_combo_item'])) continue;
             $product = \App\Models\Product::with('product_catalogues')->find($item['product_id']);
             $variant = !empty($item['variant_id']) ? \App\Models\ProductVariant::find($item['variant_id']) : null;
             if (!$product) continue;
@@ -204,7 +301,7 @@ class CartService implements CartServiceInterface
 
         $totalRetail = 0; $totalProdDisc = 0; $subtotalAfterProd = 0; $totalQty = 0;
         foreach ($cart['items'] as $rid => $item) {
-            if (!empty($item['is_gift'])) continue;
+            if (!empty($item['is_gift']) || !empty($item['is_split'])) continue;
             $totalRetail += ($item['prices']['retail'] * $item['quantity']);
             $totalProdDisc += (($item['prices']['retail'] - $item['prices']['promo']) * $item['quantity']);
         }
@@ -221,7 +318,7 @@ class CartService implements CartServiceInterface
         // Ensure all items eligible for BXGY (buy or get) have the label, even if not currently rewards.
         $bxgyPromos = \App\Models\Promotion::where('publish', 2)->where('type', 'buy_x_get_y')->expiryStatus('active')->orderBy('id', 'desc')->get();
         foreach ($cart['items'] as &$it) {
-            if (!empty($it['promo_id'])) continue; 
+            if (!empty($it['promo_id']) || !empty($it['is_combo_item'])) continue; 
             if (!isset($it['product_promotions'])) $it['product_promotions'] = [];
             
             foreach ($bxgyPromos as $promo) {
@@ -268,6 +365,7 @@ class CartService implements CartServiceInterface
             \Illuminate\Support\Facades\Log::info("  [ORDER BRANCH] Using Best Single (Reset)");
             $cart['items'] = $baseItems; 
             foreach ($cart['items'] as &$it) {
+                if (!empty($it['is_combo_item'])) continue; // Bảo vệ giá combo
                 $it['price'] = $it['prices']['retail'];
                 $it['product_promotions'] = [];
             }

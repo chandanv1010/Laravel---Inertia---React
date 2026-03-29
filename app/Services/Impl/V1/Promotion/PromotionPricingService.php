@@ -546,6 +546,135 @@ class PromotionPricingService
 
     /**
      * Lấy các chương trình Mua X Tặng Y có liên quan đến sản phẩm này
+     * Trả về kết quả đã được phân loại thành "Quà tặng miễn phí" và "Sản phẩm giảm giá"
+     */
+    public function getBuyXGetYCategorized($entity): array
+    {
+        $promos = $this->getBuyXGetYForProduct($entity);
+        
+        $freeGifts = [];
+        $discounts = [];
+        
+        foreach ($promos as $promo) {
+            // Phân loại: Nếu discount_type là free hoặc discount_value là 100
+            $isFree = ($promo['discount_type'] === 'free' || (int)$promo['discount_value'] === 100);
+            
+            $item = [
+                'id' => $promo['id'],
+                'name' => $promo['name'],
+                'description' => $promo['description'],
+                'rewards' => $promo['reward_details'] ?? [],
+                // Thêm thông tin điều kiện để Frontend hiển thị (Ví dụ: Mua 2 Tặng 1)
+                'buy_qty' => collect($promo['buy_x_get_y_items'])->where('item_type', 'buy')->sum('quantity'),
+            ];
+            
+            if ($isFree) {
+                $freeGifts[] = $item;
+            } else {
+                $discounts[] = $item;
+            }
+        }
+        
+        return [
+            'free_gifts' => $freeGifts,
+            'discounts' => $discounts
+        ];
+    }
+
+    /**
+     * Lấy danh sách các Combo mà sản phẩm này là thành viên
+     */
+    public function getCombosForProduct($entity): Collection
+    {
+        if (is_numeric($entity)) {
+            $entity = Product::with('product_catalogues')->find($entity);
+        }
+
+        if (!$entity) return collect([]);
+
+        $isVariant = $entity instanceof \App\Models\ProductVariant;
+        $product = $isVariant ? $entity->product : $entity;
+        
+        if (!$product) return collect([]);
+
+        $productId = $product->id;
+        $variantId = $isVariant ? $entity->id : null;
+        $catalogueIds = $product->product_catalogues->pluck('id')->toArray();
+
+        // 1. Lấy tất cả Combo đang hoạt động
+        $combos = Promotion::where('publish', 2)
+            ->where('type', 'combo')
+            ->expiryStatus('active')
+            ->where(function ($q) {
+                $q->where('start_date', '<=', now())
+                    ->orWhereNull('start_date');
+            })
+            ->with(['combo_items.product', 'combo_items.product_variant.attributes.attribute_catalogue.current_languages', 'combo_items.product_variant.product'])
+            ->get();
+
+        $applicableCombos = collect([]);
+
+        foreach ($combos as $combo) {
+            $isMatch = false;
+
+            // NEW: Kiểm tra xem sản phẩm đang xem có nằm TRONG danh sách các mặt hàng của Combo không
+            foreach ($combo->combo_items as $item) {
+                if ($item->product_id == $productId) {
+                    if ($variantId) {
+                        // Nếu đang xem variant cụ thể, thì combo phải chứa variant đó 
+                        // HOẶC combo chứa product gốc nhưng không chỉ định variant (áp dụng cho tất cả variant)
+                        if ($item->product_variant_id == $variantId || is_null($item->product_variant_id)) {
+                            $isMatch = true;
+                            break;
+                        }
+                    } else {
+                        // Nếu đang xem sản phẩm chung, chỉ cần match product_id
+                        $isMatch = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($isMatch) {
+                // Lấy CHI TIẾT các sản phẩm trong Combo này để show popup
+                $comboProducts = [];
+                
+                foreach ($combo->combo_items as $item) {
+                    $p = $item->product;
+                    if (!$p) continue;
+                    
+                    $v = $item->product_variant;
+                    
+                        $comboProducts[] = [
+                            'id' => $p->id,
+                            'variant_id' => $v ? $v->id : null,
+                            'name' => $v ? $v->variant_name : $p->name,
+                            'canonical' => $p->current_languages->first()?->pivot?->canonical,
+                            'image' => $v ? ($v->image ?: $p->image) : $p->image,
+                            'retail_price' => $v ? $v->retail_price : $p->retail_price,
+                            'sku' => $v ? $v->sku : $p->sku,
+                            'quantity' => $item->quantity,
+                        ];
+                }
+                
+                // Trả về mảng thay vì Model để tránh mất dữ liệu khi Inertia serialize
+                $applicableCombos->push([
+                    'id' => $combo->id,
+                    'name' => $combo->name,
+                    'description' => $combo->description,
+                    'combo_price' => $combo->combo_price,
+                    'image' => $combo->image,
+                    'combo_products' => $comboProducts,
+                    'type' => $combo->type,
+                ]);
+            }
+        }
+
+        return $applicableCombos;
+    }
+
+    /**
+     * Lấy các chương trình Mua X Tặng Y có liên quan đến sản phẩm này
      * (Sản phẩm này đóng vai trò là "Mua X")
      */
     public function getBuyXGetYForProduct($entity): Collection
@@ -609,9 +738,9 @@ class PromotionPricingService
                 foreach ($getItems as $getItem) {
                     $giftEntity = null;
                     if ($getItem->apply_type === 'product') {
-                        $giftEntity = Product::find($getItem->product_id);
+                        $giftEntity = Product::with('current_languages')->find($getItem->product_id);
                     } elseif ($getItem->apply_type === 'product_variant') {
-                        $giftEntity = \App\Models\ProductVariant::find($getItem->product_variant_id);
+                        $giftEntity = \App\Models\ProductVariant::with('product.current_languages')->find($getItem->product_variant_id);
                     }
 
                     if ($giftEntity) {
@@ -621,7 +750,8 @@ class PromotionPricingService
                         $rewardDetails[] = [
                             'product_id' => $giftProduct->id,
                             'variant_id' => $isV ? $giftEntity->id : null,
-                            'name' => ($isV && $giftEntity->name) ? ($giftProduct->name . ' - ' . $giftEntity->name) : ($giftProduct->name ?? 'Sản phẩm quà tặng'),
+                            'name' => $isV ? $giftEntity->variant_name : ($giftProduct->name ?? 'Sản phẩm quà tặng'),
+                            'canonical' => $giftProduct->current_languages->first()?->pivot?->canonical,
                             'sku' => $giftEntity->sku ?? $giftProduct->sku ?? '',
                             'image' => $giftEntity->image ?: $giftProduct->image,
                             'price' => $giftEntity->retail_price ?? $giftProduct->retail_price,
@@ -632,8 +762,15 @@ class PromotionPricingService
                     }
                 }
                 
-                $promo->reward_details = $rewardDetails;
-                $applicablePromos->push($promo);
+                $applicablePromos->push([
+                    'id' => $promo->id,
+                    'name' => $promo->name,
+                    'description' => $promo->description,
+                    'discount_type' => $promo->discount_type,
+                    'discount_value' => $promo->discount_value,
+                    'reward_details' => $rewardDetails,
+                    'buy_x_get_y_items' => $promo->buy_x_get_y_items,
+                ]);
             }
         }
 

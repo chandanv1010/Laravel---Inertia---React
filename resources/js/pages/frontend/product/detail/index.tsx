@@ -8,6 +8,7 @@ import ProductDescription from '@/components/frontend/product/product-descriptio
 import ProductPriceDetail from '@/components/frontend/product/product-price-detail';
 import VoucherList from '@/components/frontend/product/product-voucher-list';
 import ProductVariantSelector from '@/components/frontend/product/product-variant-selector';
+import ProductPromotionBlocks from '@/components/frontend/product/product-promotion-blocks';
 import BuyXGetYSlider from '@/components/frontend/product/buy-x-get-y-slider';
 
 // Interfaces
@@ -46,13 +47,17 @@ interface ProductDetailProps {
     relatedProducts: any[];
     promotionalWidget: any;
     suggestedProducts: any;
+    combos: any[];
     breadcrumbs: any[];
     seo: any;
     catalogue: any;
     product_catalogue_breadcrumb?: any[]; // Added based on instruction
     vouchers?: any[];
     freeship_voucher?: any;
-    buy_x_get_y?: any[];
+    buy_x_get_y: {
+        free_gifts: any[];
+        discounts: any[];
+    };
 }
 
 export default function ProductDetail({
@@ -60,12 +65,13 @@ export default function ProductDetail({
     relatedProducts,
     promotionalWidget,
     suggestedProducts,
+    combos = [],
     breadcrumbs,
     seo,
     catalogue,
     vouchers = [],
     freeship_voucher,
-    buy_x_get_y = []
+    buy_x_get_y = { free_gifts: [], discounts: [] }
 }: ProductDetailProps) {
     // State for selected variant, stock status, and quantity
     const [selectedVariant, setSelectedVariant] = useState<any | null>(null);
@@ -205,11 +211,18 @@ export default function ProductDetail({
                                     quantity={quantity}
                                     onQuantityChange={setQuantity}
                                 />
-                            </div>
 
-                            {/* Buy X Get Y Slider - Suggestion box */}
-                            <BuyXGetYSlider promotions={buy_x_get_y} />
+                                {/* Product Promotion Blocks (Combo, Gifts, Discounts) */}
+
+                            </div>
                         </div>
+                    </div>
+
+                    <div className="mb-20">
+                        <ProductPromotionBlocks
+                            combos={combos}
+                            buy_x_get_y={buy_x_get_y}
+                        />
                     </div>
 
                     {/* Product Content / Description */}

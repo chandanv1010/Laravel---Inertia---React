@@ -122,14 +122,14 @@ export default function ProductCard({
             className={`bg-white border border-gray-200 rounded-lg overflow-hidden group hover:shadow-lg transition-shadow duration-300 flex flex-col ${className}`}
         >
             {/* Image Container */}
-            <div className="relative aspect-square bg-white overflow-hidden">
+            <div className="relative aspect-[3/4] bg-white overflow-hidden">
                 {renderBadge()}
 
                 <Link href={productUrl} className="block w-full h-full">
                     <img
                         src={product.image || '/images/placeholder.png'}
                         alt={product.name}
-                        className="w-full h-full object-contain p-4 transition-transform duration-300 group-hover:scale-105"
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                 </Link>
             </div>

@@ -13,10 +13,39 @@ interface CartSidebarProps {
 export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
     const { cart, cartItems, cartTotal, discountTotal, finalTotal, removeFromCart, addToCart, clearCart } = useCart();
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
+    
+    const groupedCartItems = React.useMemo(() => {
+        const groups: { [key: string]: any } = {};
+        const result: any[] = [];
+
+        cartItems.forEach(item => {
+            if (item.is_combo_item && item.combo_group_id) {
+                const groupId = item.combo_group_id;
+                if (!groups[groupId]) {
+                    groups[groupId] = {
+                        ...item,
+                        row_id: `group_${groupId}`,
+                        name: (item as any).combo_name || item.name,
+                        image: (item as any).combo_image || item.image,
+                        is_combo_group: true,
+                        child_row_ids: [],
+                        total_price: 0,
+                    };
+                    result.push(groups[groupId]);
+                }
+                groups[groupId].child_row_ids.push(item.row_id);
+                groups[groupId].total_price += (item.price * item.quantity);
+            } else {
+                result.push(item);
+            }
+        });
+
+        return result;
+    }, [cartItems]);
 
     // Check if all items are selected based on IDs match
     const isAllSelected = cartItems.length > 0 && cartItems.every(item =>
-        selectedItems.some(id => String(id) === String(item.row_id))
+        selectedItems.includes(item.row_id)
     );
 
     // Sync selectedItems when cartItems change (remove invalid IDs, add default if empty?)
@@ -74,10 +103,21 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
     };
 
     const handleSelect = (rowId: string) => {
-        if (selectedItems.includes(rowId)) {
-            setSelectedItems(selectedItems.filter(id => id !== rowId));
+        const item = groupedCartItems.find(i => i.row_id === rowId);
+        if (item?.is_combo_group) {
+            const childIds = item.child_row_ids;
+            const allSelected = childIds.every(id => selectedItems.includes(id));
+            if (allSelected) {
+                setSelectedItems(selectedItems.filter(id => !childIds.includes(id)));
+            } else {
+                setSelectedItems(Array.from(new Set([...selectedItems, ...childIds])));
+            }
         } else {
-            setSelectedItems([...selectedItems, rowId]);
+            if (selectedItems.includes(rowId)) {
+                setSelectedItems(selectedItems.filter(id => id !== rowId));
+            } else {
+                setSelectedItems([...selectedItems, rowId]);
+            }
         }
     };
 
@@ -191,11 +231,14 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
 
                 {/* Items List */}
                 <div className="divide-y divide-gray-100">
-                    {cartItems.map((item) => (
+                    {groupedCartItems.map((item) => (
                         <CartItemRow
                             key={item.row_id}
                             item={item}
-                            isSelected={selectedItems.includes(item.row_id)}
+                            isSelected={item.is_combo_group 
+                                ? item.child_row_ids.every((id: string) => selectedItems.includes(id))
+                                : selectedItems.includes(item.row_id)
+                            }
                             onSelect={handleSelect}
                             formatPrice={formatPrice}
                         />

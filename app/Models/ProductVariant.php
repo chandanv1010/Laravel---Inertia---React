@@ -83,17 +83,16 @@ class ProductVariant extends Model
     ];
     public function getVariantNameAttribute(): string
     {
-        $attributes = $this->attributes()->with(['attribute_catalogues' => function($query) {
+        $attributes = $this->attributes()->with(['attribute_catalogue' => function($query) {
             $query->whereHas('current_languages');
         }])->get();
 
-        if ($attributes->isEmpty()) {
-            return $this->product->name ?? '';
-        }
+        $baseName = $this->product->name ?? '';
+        if ($attributes->isEmpty()) return $baseName;
 
         $parts = [];
         foreach ($attributes as $attribute) {
-            $catalogue = $attribute->attribute_catalogues->first();
+            $catalogue = $attribute->attribute_catalogue;
             $catalogueName = $catalogue ? ($catalogue->current_languages->first()->pivot->name ?? $catalogue->name) : '';
             $attributeName = $attribute->current_languages->first()->pivot->name ?? $attribute->name;
             
@@ -104,7 +103,6 @@ class ProductVariant extends Model
             }
         }
 
-        $baseName = $this->product->name ?? '';
         return $baseName . ' - ' . implode(', ', $parts);
     }
 

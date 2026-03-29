@@ -99,11 +99,11 @@ export default function ProductDealOfTheWeek({
             <div className="p-5 flex-1 flex flex-col">
                 {/* Product Image */}
                 <Link href={productUrl} className="block mb-4 relative group">
-                    <div className="aspect-square rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center p-4">
+                    <div className="aspect-[3/4] rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center p-0">
                         <img
                             src={product.image || '/images/placeholder.png'}
                             alt={product.name}
-                            className="w-full h-full object-scale-down group-hover:scale-105 transition-transform duration-300"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
                     </div>
                     {/* Discount Badge */}

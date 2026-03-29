@@ -14,6 +14,8 @@ interface CartItem {
     product_promotions?: any[];
     is_gift?: boolean;
     promo_id?: number;
+    is_combo_item?: boolean;
+    combo_group_id?: string;
 }
 
 interface CartContextType {
@@ -21,6 +23,7 @@ interface CartContextType {
     cartCount: number;
     cartTotal: number;
     addToCart: (productId: number, variantId: number | null, quantity: number, promoId?: number) => Promise<any>;
+    addCombo: (comboId: number) => Promise<any>;
     removeFromCart: (rowId: string) => Promise<void>;
     updateQuantity: (rowId: string, quantity: number) => Promise<void>;
     clearCart: () => Promise<void>;
@@ -96,10 +99,37 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const addCombo = async (comboId: number) => {
+        setIsLoading(true);
+        try {
+            const response = await axios.post('/cart/add', {
+                promo_id: comboId,
+                quantity: 1,
+                is_combo: true
+            });
+
+            if (response.data.status === 'success') {
+                const data = response.data.data;
+                setCartItems(Object.values(data.items));
+                setCartCount(data.total_quantity);
+                setCartTotal(data.total_price);
+                setDiscountTotal(data.discount_total || 0);
+                setFinalTotal(data.final_total || data.total_price);
+                setVoucherCode(data.voucher_code);
+                setCart(data);
+                return response.data;
+            }
+        } catch (error) {
+            console.error('Add combo failed', error);
+            throw error;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const removeFromCart = async (rowId: string) => {
         setIsLoading(true);
         try {
-            // Fix: Use DELETE method and pass data in config object
             const response = await axios.delete('/cart/remove', { data: { row_id: rowId } });
             if (response.data.status === 'success') {
                 const data = response.data.data;
@@ -121,13 +151,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     const updateQuantity = async (rowId: string, quantity: number) => {
         setIsLoading(true);
         try {
-            // Fix: Use PUT method
             const response = await axios.put('/cart/update', { row_id: rowId, quantity });
             if (response.data.status === 'success') {
                 const data = response.data.data;
                 setCartItems(Object.values(data.items));
                 setCartCount(data.total_quantity);
-                // ...
                 setCartTotal(data.total_price);
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
@@ -146,7 +174,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         try {
             const response = await axios.delete('/cart/clear');
             if (response.data.status === 'success') {
-                // Reset state
                 setCartItems([]);
                 setCartCount(0);
                 setCartTotal(0);
@@ -187,7 +214,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     return (
         <CartContext.Provider value={{
             cartItems, cartCount, cartTotal, discountTotal, finalTotal, voucherCode, cart,
-            addToCart, removeFromCart, updateQuantity, clearCart, refreshCart, applyVoucher, isLoading
+            addToCart, addCombo, removeFromCart, updateQuantity, clearCart, refreshCart, applyVoucher, isLoading
         }}>
             {children}
         </CartContext.Provider>

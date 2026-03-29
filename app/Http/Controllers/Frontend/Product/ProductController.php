@@ -96,8 +96,11 @@ class ProductController extends Controller
         $allProductIds = array_merge([$productId], collect($relatedProducts)->pluck('id')->toArray());
         $this->promotionPricingService->preloadForProducts($allProductIds);
 
-        // Fetch Buy X Get Y promotions for the slider
-        $buyXGetYPromotions = $this->promotionPricingService->getBuyXGetYForProduct($product);
+        // Fetch Buy X Get Y promotions for the slider (Categorized for UI blocks)
+        $buyXGetYCategorized = $this->promotionPricingService->getBuyXGetYCategorized($product);
+
+        // Fetch Combos containing this product
+        $combos = $this->promotionPricingService->getCombosForProduct($product);
 
         return Inertia::render('frontend/product/detail/index', [
             'product' => new ProductResource($product), // Wrap with Resource to flatten data
@@ -106,7 +109,8 @@ class ProductController extends Controller
             'suggestedProducts' => $suggestedProducts,
             'vouchers' => $vouchers,
             'freeship_voucher' => $freeshipVoucher,
-            'buy_x_get_y' => $buyXGetYPromotions, // Pass as buy_x_get_y
+            'buy_x_get_y' => $buyXGetYCategorized, // Pass categorized version
+            'combos' => $combos, // Pass combos
             'breadcrumbs' => $breadcrumbs,
             'seo' => $seo,
             'catalogue' => $catalogue,

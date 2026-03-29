@@ -23,7 +23,7 @@ export default function ProductItemVertical({ product, className }: { product: P
     return (
         <div className={cn("group flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all duration-300", className)}>
             {/* Image Section - Top */}
-            <div className="relative aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+            <div className="relative aspect-[3/4] overflow-hidden bg-zinc-100 dark:bg-zinc-800">
                 <Link href={product.canonical || '#'}>
                     <img
                         src={product.image}

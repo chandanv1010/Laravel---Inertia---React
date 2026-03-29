@@ -64,15 +64,31 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
         }
     };
 
+    const isCombo = item.is_combo_group || item.is_combo_item;
+    const isGift = item.is_gift;
+
+    const handleDelete = async () => {
+        if (item.is_combo_group) {
+            if (confirm('Bạn có chắc muốn xóa combo này?')) {
+                for (const rowId of item.child_row_ids) {
+                    await removeFromCart(rowId);
+                }
+            }
+        } else {
+            await removeFromCart(item.row_id);
+        }
+    };
+
     return (
         <div className={`p-4 flex gap-4 group transition-colors items-center ${
-            item.is_gift ? 'bg-green-50/30' : 
+            isGift ? 'bg-green-50/30' : 
+            isCombo ? 'bg-blue-50/30' :
             item.promo_id ? 'bg-orange-50/30' :
             'hover:bg-gray-50'
         }`}>
             {/* Checkbox */}
             <div className="flex-shrink-0">
-                {!item.is_gift && (
+                {!isGift && (
                     <label className="relative flex items-center justify-center cursor-pointer p-1">
                         <input
                             type="checkbox"
@@ -81,15 +97,17 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                             onChange={() => onSelect(item.row_id)}
                         />
                         <div className={`w-[20px] h-[20px] border-2 rounded-[4px] bg-white flex items-center justify-center transition-all shrink-0 leading-none ${
-                            item.promo_id ? 'border-orange-500 peer-checked:border-orange-600' : 'border-blue-600 peer-checked:border-blue-600'
+                            isCombo ? 'border-blue-500 peer-checked:border-blue-600' :
+                            item.promo_id ? 'border-orange-500 peer-checked:border-orange-600' : 
+                            'border-blue-600 peer-checked:border-blue-600'
                         }`}>
                             <div className={`w-3 h-3 rounded-[2px] transition-transform transform ${
                                 isSelected ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
-                            } ${item.promo_id ? 'bg-orange-600' : 'bg-blue-600'}`}></div>
+                            } ${isCombo ? 'bg-blue-600' : item.promo_id ? 'bg-orange-600' : 'bg-blue-600'}`}></div>
                         </div>
                     </label>
                 )}
-                {item.is_gift && (
+                {isGift && (
                     <div className="w-[20px] h-[20px] flex items-center justify-center text-green-600">
                         <Gift size={18} />
                     </div>
@@ -98,7 +116,8 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
 
             {/* Image */}
             <div className={`w-24 h-32 bg-gray-100 rounded-md flex-shrink-0 overflow-hidden border relative ${
-                item.is_gift ? 'border-green-200' : 
+                isGift ? 'border-green-200' : 
+                isCombo ? 'border-blue-200' : 
                 item.promo_id ? 'border-orange-200' : 
                 'border-gray-200'
             }`}>
@@ -111,12 +130,17 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                         e.currentTarget.onerror = null;
                     }}
                 />
-                {item.is_gift && (
+                {isGift && (
                     <div className="absolute top-0 right-0 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-bl-md shadow-sm uppercase">
                         Gift
                     </div>
                 )}
-                {item.promo_id && !item.is_gift && (
+                {isCombo && (
+                    <div className="absolute top-0 right-0 bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-bl-md shadow-sm uppercase">
+                        Combo
+                    </div>
+                )}
+                {item.promo_id && !isGift && !isCombo && (
                     <div className="absolute top-0 right-0 bg-orange-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-bl-md shadow-sm uppercase">
                         Ưu đãi
                     </div>
@@ -129,24 +153,29 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                 <div className="col-span-5 flex flex-col justify-between h-full py-1">
                     <div>
                         <h3 className={`font-bold text-sm line-clamp-2 mb-1 ${
-                            item.is_gift ? 'text-green-800' : 
+                            isGift ? 'text-green-800' : 
+                            isCombo ? 'text-blue-800' :
                             item.promo_id ? 'text-orange-800' :
                             'text-gray-900'
                         }`}>
                             {item.name}
                         </h3>
                         <div className="text-xs text-gray-500 mb-2">
-                            {item.options && Object.keys(item.options).length > 0 ? (
-                                Object.entries(item.options).map(([key, value]) => (
-                                    <span key={key} className="mr-2">{key}: {value as string}</span>
-                                ))
+                            {isCombo ? (
+                                <span>Gói sản phẩm tiết kiệm</span>
                             ) : (
-                                <span>{item.name.includes(' - ') ? item.name.split(' - ').slice(1).join(' - ') : 'Tiêu chuẩn'}</span>
+                                item.options && Object.keys(item.options).length > 0 ? (
+                                    Object.entries(item.options).map(([key, value]) => (
+                                        <span key={key} className="mr-2">{key}: {value as string}</span>
+                                    ))
+                                ) : (
+                                    <span>{item.name.includes(' - ') ? item.name.split(' - ').slice(1).join(' - ') : 'Tiêu chuẩn'}</span>
+                                )
                             )}
                         </div>
 
                         {/* Product Promotions - BXGY Labels */}
-                        {item.product_promotions && item.product_promotions.length > 0 && (
+                        {item.product_promotions && item.product_promotions.length > 0 && !isCombo && (
                             <div className="flex flex-wrap gap-1 mt-1">
                                 {item.product_promotions.map((promo: any, idx: number) => {
                                     const isBXGY = promo.type === 'buy_x_get_y';
@@ -166,7 +195,7 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                             </div>
                         )}
                         
-                        {item.is_gift && (
+                        {isGift && (
                             <div className="mt-2 inline-flex items-center gap-1 text-green-600 font-bold text-[11px] uppercase tracking-wider">
                                 <span className="relative flex h-2 w-2">
                                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -176,7 +205,17 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                             </div>
                         )}
 
-                        {item.promo_id && !item.is_gift && (
+                        {isCombo && (
+                            <div className="mt-2 inline-flex items-center gap-1 text-blue-600 font-bold text-[11px] uppercase tracking-wider">
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                                </span>
+                                Combo
+                            </div>
+                        )}
+
+                        {item.promo_id && !isGift && !isCombo && (
                             <div className="mt-2 inline-flex items-center gap-1 text-orange-600 font-bold text-[11px] uppercase tracking-wider">
                                 <span className="relative flex h-2 w-2">
                                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
@@ -188,9 +227,9 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                     </div>
 
                     {/* Delete Button */}
-                    {!item.is_gift && (
+                    {!isGift && (
                         <button
-                            onClick={() => removeFromCart(item.row_id)}
+                            onClick={handleDelete}
                             className="text-gray-400 hover:text-red-500 text-xs flex items-center gap-1 transition-colors w-fit pt-2 cursor-pointer"
                         >
                             <Trash2 size={14} /> Xóa
@@ -200,7 +239,7 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
 
                 {/* Center: Quantity */}
                 <div className="col-span-4 flex justify-center">
-                    {item.is_gift ? (
+                    {isGift ? (
                         <div className="text-sm font-bold text-gray-600 bg-gray-100 px-4 py-1.5 rounded-full border border-gray-200">
                             x{item.quantity}
                         </div>
@@ -237,20 +276,21 @@ export default function CartItemRow({ item, isSelected, onSelect, formatPrice }:
                 {/* Right: Price */}
                 <div className="col-span-3 text-right">
                     <div className={`font-bold text-base ${
-                        item.is_gift ? 'text-green-600' : 
+                        isGift ? 'text-green-600' : 
+                        isCombo ? 'text-blue-600' :
                         item.promo_id ? 'text-orange-600' :
                         'text-gray-900'
                     }`}>
-                        {item.is_gift ? 'Miễn phí' : formatPrice(item.price * (typeof localQuantity === 'number' ? localQuantity : item.quantity))}
+                        {isGift ? 'Miễn phí' : formatPrice(item.is_combo_group ? item.total_price : (item.price * (typeof localQuantity === 'number' ? localQuantity : item.quantity)))}
                     </div>
 
-                    {!item.is_gift && (typeof localQuantity === 'number' ? localQuantity : item.quantity) > 1 && (
+                    {!isGift && !item.is_combo_group && (typeof localQuantity === 'number' ? localQuantity : item.quantity) > 1 && (
                         <div className="text-[11px] text-gray-500 mt-0.5">
                             ({formatPrice(item.price)}/sp)
                         </div>
                     )}
 
-                    {((item.original_price ?? 0) > item.price || item.is_gift) && (
+                    {!item.is_combo_group && ((item.original_price ?? 0) > item.price || isGift) && (
                         <div className="text-xs text-gray-400 line-through mt-1">
                             {formatPrice((item.original_price || item.price) * (typeof localQuantity === 'number' ? localQuantity : item.quantity))}
                         </div>

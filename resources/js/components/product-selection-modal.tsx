@@ -316,7 +316,16 @@ export function ProductSelectionModal({
                 const variantNameParts: string[] = [];
                 const variant = product.variants?.find(v => v.id === variantId);
                 if (variant?.attributes && typeof variant.attributes === 'object') {
-                    variantNameParts.push(...Object.values(variant.attributes).filter(v => v != null).map(v => String(v).trim()).filter(v => v));
+                    const names = Object.values(variant.attributes).map(v => {
+                        if (v && typeof v === 'object') {
+                            // Handle multilingual object: { vi: '...', en: '...' }
+                            // @ts-ignore
+                            const langId = String(window.config?.language_id || '1');
+                            return (v as any)[langId] || Object.values(v)[0] || '';
+                        }
+                        return String(v || '').trim();
+                    }).filter(v => v);
+                    variantNameParts.push(...names);
                 }
                 const variantName = variantNameParts.length > 0
                     ? variantNameParts.join(' / ')
@@ -383,7 +392,15 @@ export function ProductSelectionModal({
                         // Tạo tên variant từ attributes
                         const variantNameParts: string[] = [];
                         if (variant.attributes && typeof variant.attributes === 'object') {
-                            variantNameParts.push(...Object.values(variant.attributes).filter(v => v != null).map(v => String(v).trim()).filter(v => v));
+                            const names = Object.values(variant.attributes).map(v => {
+                                if (v && typeof v === 'object') {
+                                    // @ts-ignore
+                                    const langId = String(window.config?.language_id || '1');
+                                    return (v as any)[langId] || Object.values(v)[0] || '';
+                                }
+                                return String(v || '').trim();
+                            }).filter(v => v);
+                            variantNameParts.push(...names);
                         }
                         const variantName = variantNameParts.length > 0
                             ? variantNameParts.join(' / ')

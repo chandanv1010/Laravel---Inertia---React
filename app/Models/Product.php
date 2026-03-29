@@ -155,5 +155,11 @@ class Product extends Model
         'expired_warning_days' => 'integer',
     ];
 
+    public function getNameAttribute(): string
+    {
+        $language = $this->current_languages->first() ?: $this->languages->first();
+        return $language->pivot->name ?? '';
+    }
+
 }
 
