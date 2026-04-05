@@ -3,16 +3,26 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Traits\HasQuery;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Support\Carbon;
 
-class Customer extends Model
+/**
+ * @property int $id
+ * @property string $first_name
+ * @property string $last_name
+ * @property string $name
+ * @property string $email
+ * @property string $phone
+ * @property string $shipping_address
+ */
+class Customer extends Authenticatable
 {
-    use HasFactory, SoftDeletes, HasQuery;
+    use HasFactory, Notifiable, SoftDeletes, HasQuery;
 
     protected $fillable = [
         'user_id',
@@ -37,13 +47,21 @@ class Customer extends Model
         'use_new_address_format',
         'notes',
         'publish',
+        'password',
+        'remember_token',
         'deleted_at',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
     ];
 
     protected $casts = [
         'date_of_birth' => 'date',
         'receive_promotional_emails' => 'boolean',
         'use_new_address_format' => 'boolean',
+        'password' => 'hashed',
         'created_at' => 'datetime:d-m-Y H:i',
         'updated_at' => 'datetime:d-m-Y H:i',
     ];

@@ -1497,7 +1497,7 @@ const SlideBuilder = ({
             // Delete key
             if (e.key === 'Delete' && hasSelection) {
                 const idsToDelete = selectedElementIds.length > 0 ? selectedElementIds : [selectedElementId!];
-                idsToDelete.forEach(id => deleteElement(id));
+                idsToDelete.forEach((id: string) => deleteElement(id));
                 setSelectedElementIds([]);
                 return;
             }
@@ -2122,7 +2122,7 @@ const SlideBuilder = ({
                         <ContextMenuItem
                             onClick={() => {
                                 const idsToDelete = selectedElementIds.length > 0 ? selectedElementIds : (selectedElementId ? [selectedElementId] : []);
-                                idsToDelete.forEach(id => deleteElement(id));
+                                idsToDelete.forEach((id: string) => deleteElement(id));
                                 setSelectedElementIds([]);
                             }}
                             disabled={!selectedElementId && selectedElementIds.length === 0}

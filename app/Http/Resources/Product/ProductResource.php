@@ -58,11 +58,16 @@ class ProductResource extends JsonResource
         
         if ($isBatchManaged) {
             // Batch-managed: lấy stock từ variant's batches
-            if ($variant->relationLoaded('batches')) {
+            if ($variant->relationLoaded('batches') && $variant->batches->isNotEmpty()) {
                 foreach ($variant->batches as $batch) {
                     if ($batch->relationLoaded('warehouseStocks')) {
                         $stock += $batch->warehouseStocks->sum('stock_quantity');
                     }
+                }
+            } else {
+                // Fallback: Nếu là batch nhưng không có lô hàng nào được load, thử lấy từ warehouseStocks cơ bản
+                if ($variant->relationLoaded('warehouseStocks')) {
+                    $stock = $variant->warehouseStocks->sum('stock_quantity');
                 }
             }
         } else {
@@ -86,12 +91,18 @@ class ProductResource extends JsonResource
         $pricingService = app(PromotionPricingService::class);
         $pricingData = $pricingService->calculateFinalPrice($this->resource, 1, true);
 
-        // Service layer đã load hết dữ liệu, chỉ cần lấy từ relation đã loaded
+        // Language fields
         $language = $this->relationLoaded('current_languages') && $this->current_languages->isNotEmpty()
             ? $this->current_languages->first()
             : ($this->relationLoaded('languages') && $this->languages->isNotEmpty()
                 ? $this->languages->first()
                 : null);
+
+        // Fetch unpaid order quantities for "Đang giao dịch" (trading_quantity)
+        // AND incoming quantities for "Hàng đang về" (incoming_quantity)
+        // Grouped by [type][target_id][warehouse_id]
+        $tradingData = $this->getTradingQuantityData();
+        $incomingData = $this->getIncomingQuantityData();
         
         return [
                    'id' => $this->id,
@@ -186,10 +197,11 @@ class ProductResource extends JsonResource
             'tags' => $this->whenLoaded('tags', function () {
                 return $this->tags->pluck('name')->filter()->values()->toArray();
             }, []),
-            'variants' => $this->whenLoaded('variants', function () {
-                return $this->variants->map(function ($variant) {
-                    // Check management_type của variant, không phải product
-                    $isVariantBatchManaged = ($variant->management_type ?? 'batch') === 'batch';
+            'variants' => $this->whenLoaded('variants', function () use ($tradingData, $incomingData) {
+                return $this->variants->map(function ($variant) use ($tradingData, $incomingData) {
+                    // Check management_type của variant — fallback về 'basic' nếu chưa set
+                    // (KHÔNG fallback về 'batch' vì sẽ đọc sai bảng -> stock = 0)
+                    $isVariantBatchManaged = ($variant->management_type ?? 'basic') === 'batch';
                 
                     $attributesMap = [];
                     if ($variant->relationLoaded('attributes')) {
@@ -224,6 +236,8 @@ class ProductResource extends JsonResource
                                         $warehouseAggregated[$wid] = [
                                             'warehouse_id' => (int) $wid,
                                             'stock_quantity' => 0,
+                                            'trading_quantity' => (int) ($tradingData['variant'][$variant->id][$wid] ?? 0),
+                                            'incoming_quantity' => (int) ($incomingData['variant'][$variant->id][$wid] ?? 0),
                                             'storage_location' => $batchStock->storage_location ?? null,
                                         ];
                                     }
@@ -234,10 +248,12 @@ class ProductResource extends JsonResource
                         $warehouseStocks = array_values($warehouseAggregated);
                     } elseif ($variant->relationLoaded('warehouseStocks')) {
                         // For basic/imei variant: get from warehouseStocks directly
-                        $warehouseStocks = $variant->warehouseStocks->map(function ($stock) {
+                        $warehouseStocks = $variant->warehouseStocks->map(function ($stock) use ($variant, $tradingData, $incomingData) {
                             return [
                                 'warehouse_id' => (int) $stock->warehouse_id,
                                 'stock_quantity' => (int) ($stock->stock_quantity ?? 0),
+                                'trading_quantity' => (int) ($tradingData['variant'][$variant->id][$stock->warehouse_id] ?? 0),
+                                'incoming_quantity' => (int) ($incomingData['variant'][$variant->id][$stock->warehouse_id] ?? 0),
                                 'storage_location' => $stock->storage_location,
                             ];
                         })->values()->toArray();
@@ -275,11 +291,41 @@ class ProductResource extends JsonResource
                     ];
                 })->values();
             }, []),
-            'warehouse_stocks' => $this->whenLoaded('warehouseStocks', function () {
-                return $this->warehouseStocks->map(function ($stock) {
+            'warehouse_stocks' => $this->whenLoaded('warehouseStocks', function () use ($tradingData, $incomingData) {
+                $isBatchManaged = $this->management_type === 'batch';
+                
+                if ($isBatchManaged && $this->relationLoaded('batches')) {
+                    // For batch-managed product: aggregate from batches
+                    $warehouseAggregated = [];
+                    foreach ($this->batches as $batch) {
+                        if ($batch->relationLoaded('warehouseStocks')) {
+                            foreach ($batch->warehouseStocks as $batchStock) {
+                                $wid = $batchStock->warehouse_id;
+                                if (!isset($warehouseAggregated[$wid])) {
+                                    $warehouseAggregated[$wid] = [
+                                        'warehouse_id' => (int) $wid,
+                                        'stock_quantity' => 0,
+                                        'trading_quantity' => (int) ($tradingData['product'][$this->id][$wid] ?? 0),
+                                        'incoming_quantity' => (int) ($incomingData['product'][$this->id][$wid] ?? 0),
+                                        'storage_location' => $batchStock->storage_location ?? null,
+                                    ];
+                                }
+                                $warehouseAggregated[$wid]['stock_quantity'] += (int) ($batchStock->stock_quantity ?? 0);
+                            }
+                        }
+                    }
+                    return array_values($warehouseAggregated);
+                }
+                
+                // For basic product
+                return $this->warehouseStocks->map(function ($stock) use ($tradingData, $incomingData) {
+                    $pid = (int) $this->id;
+                    $wid = (int) $stock->warehouse_id;
                     return [
-                        'warehouse_id' => (int) $stock->warehouse_id,
+                        'warehouse_id' => $wid,
                         'stock_quantity' => (int) ($stock->stock_quantity ?? 0),
+                        'trading_quantity' => (int) ($tradingData['product'][$pid][$wid] ?? 0),
+                        'incoming_quantity' => (int) ($incomingData['product'][$pid][$wid] ?? 0),
                         'storage_location' => $stock->storage_location,
                     ];
                 })->values();
@@ -378,6 +424,108 @@ class ProductResource extends JsonResource
                 return array_values($catalogues);
             }, []),
         ];
+    }
+
+    /**
+     * Get Trading quantity (Đang giao dịch) for Product/Variants per Warehouse
+     * Logic: Orders not paid (unpaid) joined with stock logs (export)
+     */
+    private function getTradingQuantityData(): array
+    {
+        $unpaidOrderIds = \App\Models\Order::where('payment_status', 'unpaid')
+            ->whereNotIn('order_status', ['cancelled'])
+            ->pluck('id')
+            ->map(fn($id) => (string)$id)
+            ->toArray();
+
+        if (empty($unpaidOrderIds)) {
+            return ['product' => [], 'variant' => []];
+        }
+
+        $trading = ['product' => [], 'variant' => []];
+
+        // 1. Basic Product Logs
+        $productLogs = \Illuminate\Support\Facades\DB::table('product_warehouse_stock_logs')
+            ->whereIn('reference_id', $unpaidOrderIds)
+            ->where('reference_type', 'App\Models\Order')
+            ->where('transaction_type', 'export')
+            ->select('product_id', 'warehouse_id', \Illuminate\Support\Facades\DB::raw('SUM(ABS(change_stock)) as qty'))
+            ->groupBy('product_id', 'warehouse_id')
+            ->get();
+            
+        foreach ($productLogs as $log) {
+            $pid = (int) $log->product_id;
+            $wid = (int) $log->warehouse_id;
+            $trading['product'][$pid][$wid] = (int)$log->qty;
+        }
+
+        // 2. Variant Logs
+        $variantLogs = \Illuminate\Support\Facades\DB::table('product_variant_warehouse_stock_logs')
+            ->whereIn('reference_id', $unpaidOrderIds)
+            ->where('reference_type', 'App\Models\Order')
+            ->where('transaction_type', 'export')
+            ->select('product_variant_id', 'warehouse_id', \Illuminate\Support\Facades\DB::raw('SUM(ABS(change_stock)) as qty'))
+            ->groupBy('product_variant_id', 'warehouse_id')
+            ->get();
+
+        foreach ($variantLogs as $log) {
+            $vid = (int) $log->product_variant_id;
+            $wid = (int) $log->warehouse_id;
+            $trading['variant'][$vid][$wid] = (int)$log->qty;
+        }
+
+        // 3. Batch logs
+        $batchLogs = \Illuminate\Support\Facades\DB::table('product_batch_stock_logs')
+            ->whereIn('reference_id', $unpaidOrderIds)
+            ->where('reference_type', 'App\Models\Order')
+            ->where('transaction_type', 'export')
+            ->select('product_id', 'product_variant_id', 'warehouse_id', \Illuminate\Support\Facades\DB::raw('SUM(ABS(change_stock)) as qty'))
+            ->groupBy('product_id', 'product_variant_id', 'warehouse_id')
+            ->get();
+
+        foreach ($batchLogs as $log) {
+            $wid = (int) $log->warehouse_id;
+            if ($log->product_variant_id) {
+                $vid = (int) $log->product_variant_id;
+                $trading['variant'][$vid][$wid] = ($trading['variant'][$vid][$wid] ?? 0) + (int)$log->qty;
+            } else {
+                $pid = (int) $log->product_id;
+                $trading['product'][$pid][$wid] = ($trading['product'][$pid][$wid] ?? 0) + (int)$log->qty;
+            }
+        }
+
+        return $trading;
+    }
+
+    /**
+     * Get Incoming quantity (Hàng đang về) for Product/Variants per Warehouse
+     * Logic: ImportOrders not completed joined with import order items
+     */
+    private function getIncomingQuantityData(): array
+    {
+        $incoming = ['product' => [], 'variant' => []];
+
+        $logs = \Illuminate\Support\Facades\DB::table('import_order_items')
+            ->join('import_orders', 'import_order_items.import_order_id', '=', 'import_orders.id')
+            ->whereIn('import_orders.status', ['draft', 'pending'])
+            ->whereNull('import_orders.deleted_at')
+            ->select('import_order_items.product_id', 'import_order_items.product_variant_id', 'import_orders.warehouse_id', 'import_order_items.quantity')
+            ->get();
+
+        foreach ($logs as $log) {
+            $wid = $log->warehouse_id;
+            $qty = (int)$log->quantity;
+            
+            if ($log->product_variant_id) {
+                if (!isset($incoming['variant'][$log->product_variant_id])) $incoming['variant'][$log->product_variant_id] = [];
+                $incoming['variant'][$log->product_variant_id][$wid] = ($incoming['variant'][$log->product_variant_id][$wid] ?? 0) + $qty;
+            } else {
+                if (!isset($incoming['product'][$log->product_id])) $incoming['product'][$log->product_id] = [];
+                $incoming['product'][$log->product_id][$wid] = ($incoming['product'][$log->product_id][$wid] ?? 0) + $qty;
+            }
+        }
+
+        return $incoming;
     }
 }
 

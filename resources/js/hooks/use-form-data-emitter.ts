@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 
-type TEmitter = string | null | string[] | number[]
+type TEmitter = string | number | null | string[] | number[]
 const useFormDateEmitter =  () => {
 
     const [formDataEmitter, setFormDataEmitter] = useState<Record<string, TEmitter >>({})

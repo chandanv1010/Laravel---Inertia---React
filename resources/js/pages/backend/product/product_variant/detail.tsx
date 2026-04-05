@@ -445,7 +445,7 @@ export default function VariantDetail({ product, variant, warehouses = [], tax }
                                 <CustomCard isShowHeader={true} title="Thông tin kho">
                                     <InventoryInfo
                                         trackInventory={trackInventory}
-                                        trackInventorySaved={variant.track_inventory}
+                                        trackInventorySaved={variant.track_inventory ?? product.track_inventory}
                                         allowNegativeStock={allowNegativeStock}
                                         onTrackInventoryChange={setTrackInventory}
                                         onAllowNegativeStockChange={setAllowNegativeStock}

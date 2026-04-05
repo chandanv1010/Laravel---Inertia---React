@@ -2,19 +2,28 @@ import React, { useState } from 'react';
 import { CreditCard, Wallet, Banknote, Truck } from 'lucide-react';
 
 interface PaymentMethodSectionProps {
-    selectedMethod: string;
-    onMethodChange: (method: string) => void;
+    selectedMethodId: number;
+    onMethodChange: (id: number) => void;
     selectedOnlineMethod?: string;
     onOnlineMethodChange?: (method: string) => void;
 }
 
 export default function PaymentMethodSection({
-    selectedMethod = 'cod',
+    selectedMethodId = 4, // Default to COD
     onMethodChange,
     selectedOnlineMethod = '',
     onOnlineMethodChange
 }: PaymentMethodSectionProps) {
-    // We lift state up, so no local state ideally, but we can default if not provided (though props are better)
+    
+    const getMethodCodeFromId = (id: number) => {
+        if (id === 1) return 'bank_transfer';
+        if (id === 2) return 'cash'; // Not used in UI yet
+        if (id === 3) return 'card_payment'; // Map to online?
+        if (id === 4) return 'cod';
+        return 'online';
+    };
+
+    const selectedCode = getMethodCodeFromId(selectedMethodId);
 
 
     return (
@@ -25,8 +34,8 @@ export default function PaymentMethodSection({
 
                 {/* 1. Online Payment (ZaloPay, ShopeePay, Cards...) - Redesigned */}
                 <div
-                    className={`border rounded-lg p-4 cursor-pointer transition-all ${selectedMethod === 'online' ? 'border-blue-600 bg-blue-50/20' : 'border-gray-200 hover:border-gray-300'}`}
-                    onClick={() => onMethodChange && onMethodChange('online')}
+                    className={`border rounded-lg p-4 cursor-pointer transition-all ${selectedCode === 'online' ? 'border-blue-600 bg-blue-50/20' : 'border-gray-200 hover:border-gray-300'}`}
+                    onClick={() => onMethodChange && onMethodChange(3)}
                 >
                     <div className="flex items-center gap-4">
                         <div className="relative flex items-center justify-center">
@@ -34,8 +43,8 @@ export default function PaymentMethodSection({
                                 type="radio"
                                 name="payment_method"
                                 value="online"
-                                checked={selectedMethod === 'online'}
-                                onChange={() => onMethodChange && onMethodChange('online')}
+                                checked={selectedCode === 'online'}
+                                onChange={() => onMethodChange && onMethodChange(3)}
                                 className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-600"
                             />
                         </div>
@@ -58,7 +67,7 @@ export default function PaymentMethodSection({
                     </div>
 
                     {/* Sub options - If Active */}
-                    {selectedMethod === 'online' && (
+                    {selectedCode === 'online' && (
                         <div className="mt-4 pl-16 grid grid-cols-1 gap-3 animate-fade-in-down">
                             <div className="text-sm text-gray-500 italic mb-1">Chọn cổng thanh toán:</div>
                             <div className="flex flex-wrap gap-3">
@@ -87,16 +96,16 @@ export default function PaymentMethodSection({
 
                 {/* 3. Bank Transfer */}
                 <div
-                    className={`border rounded-lg p-4 cursor-pointer transition-all ${selectedMethod === 'bank_transfer' ? 'border-blue-600 bg-blue-50/20' : 'border-gray-200 hover:border-gray-300'}`}
-                    onClick={() => onMethodChange && onMethodChange('bank_transfer')}
+                    className={`border rounded-lg p-4 cursor-pointer transition-all ${selectedCode === 'bank_transfer' ? 'border-blue-600 bg-blue-50/20' : 'border-gray-200 hover:border-gray-300'}`}
+                    onClick={() => onMethodChange && onMethodChange(1)}
                 >
                     <div className="flex items-center gap-4">
                         <input
                             type="radio"
                             name="payment_method"
                             value="bank_transfer"
-                            checked={selectedMethod === 'bank_transfer'}
-                            onChange={() => onMethodChange && onMethodChange('bank_transfer')}
+                            checked={selectedCode === 'bank_transfer'}
+                            onChange={() => onMethodChange && onMethodChange(1)}
                             className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-600"
                         />
                         <div className="flex-shrink-0 w-12 h-12 bg-white rounded border border-gray-100 flex items-center justify-center">
@@ -107,7 +116,7 @@ export default function PaymentMethodSection({
                         </div>
                     </div>
 
-                    {selectedMethod === 'bank_transfer' && (
+                    {selectedCode === 'bank_transfer' && (
                         <div className="mt-4 pl-0 md:pl-16">
                             <div className="p-4 bg-white rounded border border-gray-200 shadow-sm text-sm">
                                 <p className="font-bold text-gray-800 mb-3 border-b pb-2">THÔNG TIN CHUYỂN KHOẢN</p>
@@ -139,16 +148,16 @@ export default function PaymentMethodSection({
 
                 {/* 4. COD */}
                 <div
-                    className={`border rounded-lg p-4 cursor-pointer transition-all ${selectedMethod === 'cod' ? 'border-blue-600 bg-blue-50/20' : 'border-gray-200 hover:border-gray-300'}`}
-                    onClick={() => onMethodChange && onMethodChange('cod')}
+                    className={`border rounded-lg p-4 cursor-pointer transition-all ${selectedCode === 'cod' ? 'border-blue-600 bg-blue-50/20' : 'border-gray-200 hover:border-gray-300'}`}
+                    onClick={() => onMethodChange && onMethodChange(4)}
                 >
                     <div className="flex items-center gap-4">
                         <input
                             type="radio"
                             name="payment_method"
                             value="cod"
-                            checked={selectedMethod === 'cod'}
-                            onChange={() => onMethodChange && onMethodChange('cod')}
+                            checked={selectedCode === 'cod'}
+                            onChange={() => onMethodChange && onMethodChange(4)}
                             className="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-600"
                         />
                         <div className="flex-shrink-0 w-12 h-12 bg-white rounded border border-gray-100 flex items-center justify-center">

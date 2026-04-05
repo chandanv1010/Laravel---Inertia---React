@@ -85,8 +85,16 @@ class LogService extends BaseCacheService implements LogServiceInterface
 
             // Nếu có record, lưu record_id và record_type
             if ($record) {
-                $logData['record_id'] = is_object($record) ? $record->id : $record;
-                $logData['record_type'] = is_object($record) ? get_class($record) : ($data['record_type'] ?? null);
+                if (is_object($record)) {
+                    $logData['record_id'] = $record->id ?? null;
+                    $logData['record_type'] = get_class($record);
+                } elseif (is_array($record)) {
+                    $logData['record_id'] = $record['id'] ?? null;
+                    $logData['record_type'] = $data['record_type'] ?? null;
+                } else {
+                    $logData['record_id'] = $record;
+                    $logData['record_type'] = $data['record_type'] ?? null;
+                }
             }
 
             // Lưu log (không dùng transaction để tránh rollback log nếu main action fail)

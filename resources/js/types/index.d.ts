@@ -34,11 +34,49 @@ export interface NavSubItem {
 export interface SharedData {
     name: string;
     quote: { message: string; author: string };
-    auth: Auth;
+    auth: {
+        user: User | null;
+        customer: Customer | null;
+    };
     sidebarOpen: boolean;
-    [key: string]: unknown;
-    flash?: { success?: string, error?: string, warning?: string, info?: string },
-    app: { url: string }
+    flash?: { 
+        success?: string, 
+        error?: string, 
+        warning?: string, 
+        info?: string,
+        [key: string]: string | undefined
+    },
+    app: { 
+        url: string,
+        language_id?: number
+    },
+    request: Record<string, any>;
+    tooltips: Record<string, any>;
+    settings: any;
+    categories: any;
+    menus: any;
+    translations: {
+        frontend: Record<string, any>;
+    };
+    url: string;
+    errors: Record<string, string>;
+    [key: string]: any;
+}
+
+export interface Customer extends IDateTime {
+    id: number;
+    user_id?: number | null;
+    customer_catalogue_id?: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone?: string;
+    date_of_birth?: string;
+    gender?: number;
+    image?: string;
+    address?: string;
+    publish?: number;
+    [key: string]: any;
 }
 
 export interface User extends IDateTime {

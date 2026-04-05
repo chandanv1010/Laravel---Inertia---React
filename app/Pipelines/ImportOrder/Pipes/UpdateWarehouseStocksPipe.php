@@ -92,7 +92,7 @@ class UpdateWarehouseStocksPipe extends AbstractImportOrderPipe
                     continue;
                 } else {
                     // Không có batch_allocations → tự động tạo batch DEFAULT và phân bổ
-                    $this->handleAutoBatchAllocation($productId, $variantId, $payload->warehouseId, $quantity, $payload->orderCode);
+                    $this->handleAutoBatchAllocation($payload->order, $productId, $variantId, $payload->warehouseId, $quantity, $payload->orderCode);
                     continue; // Đã xử lý trong handleAutoBatchAllocation
                 }
             }
@@ -101,16 +101,16 @@ class UpdateWarehouseStocksPipe extends AbstractImportOrderPipe
             // - Bỏ qua batch_allocations (nếu có) vì sản phẩm đã chuyển từ batch -> basic
             // - Nhập vào warehouse stock trực tiếp
             if ($variantId) {
-                $this->updateVariantWarehouseStock($variantId, $payload->warehouseId, $quantity, $payload->orderCode);
+                $this->updateVariantWarehouseStock($payload->order, $variantId, $payload->warehouseId, $quantity, $payload->orderCode);
             } elseif ($productId) {
-                $this->updateProductWarehouseStock($productId, $payload->warehouseId, $quantity, $payload->orderCode);
+                $this->updateProductWarehouseStock($payload->order, $productId, $payload->warehouseId, $quantity, $payload->orderCode);
             }
         }
         
         return $next($payload);
     }
     
-    protected function updateProductWarehouseStock(int $productId, int $warehouseId, int $quantity, string $orderCode): void
+    protected function updateProductWarehouseStock($order, int $productId, int $warehouseId, int $quantity, string $orderCode): void
     {
         $warehouseStockRepo = $this->getWarehouseStockRepo();
         $warehouseStockLogRepo = $this->getWarehouseStockLogRepo();
@@ -146,10 +146,12 @@ class UpdateWarehouseStocksPipe extends AbstractImportOrderPipe
             'reason' => "Nhập hàng từ đơn nhập #{$orderCode}",
             'transaction_type' => 'import',
             'user_id' => Auth::id(),
+            'reference_id' => $order->id,
+            'reference_type' => get_class($order),
         ]);
     }
     
-    protected function updateVariantWarehouseStock(int $variantId, int $warehouseId, int $quantity, string $orderCode): void
+    protected function updateVariantWarehouseStock($order, int $variantId, int $warehouseId, int $quantity, string $orderCode): void
     {
         $variantWarehouseStockRepo = $this->getVariantWarehouseStockRepo();
         $variantWarehouseStockLogRepo = $this->getVariantWarehouseStockLogRepo();
@@ -185,6 +187,8 @@ class UpdateWarehouseStocksPipe extends AbstractImportOrderPipe
             'reason' => "Nhập hàng từ đơn nhập #{$orderCode}",
             'transaction_type' => 'import',
             'user_id' => Auth::id(),
+            'reference_id' => $order->id,
+            'reference_type' => get_class($order),
         ]);
     }
     
@@ -192,7 +196,7 @@ class UpdateWarehouseStocksPipe extends AbstractImportOrderPipe
      * Tự động tạo batch DEFAULT và phân bổ stock khi sản phẩm là batch nhưng không có batch_allocations
      * Trường hợp này xảy ra khi đơn nhập được tạo khi sản phẩm là basic, sau đó sản phẩm chuyển thành batch
      */
-    protected function handleAutoBatchAllocation(?int $productId, ?int $variantId, int $warehouseId, int $quantity, string $orderCode): void
+    protected function handleAutoBatchAllocation($order, ?int $productId, ?int $variantId, int $warehouseId, int $quantity, string $orderCode): void
     {
         Log::info('Auto-creating DEFAULT batch for import', [
             'product_id' => $productId,
@@ -202,7 +206,7 @@ class UpdateWarehouseStocksPipe extends AbstractImportOrderPipe
             'order_code' => $orderCode,
         ]);
         
-        DB::transaction(function () use ($productId, $variantId, $warehouseId, $quantity, $orderCode) {
+        DB::transaction(function () use ($order, $productId, $variantId, $warehouseId, $quantity, $orderCode) {
             // Lấy hoặc tạo batch DEFAULT
             $defaultBatch = $this->getOrCreateDefaultBatch($productId, $variantId);
             
@@ -242,6 +246,8 @@ class UpdateWarehouseStocksPipe extends AbstractImportOrderPipe
                 'reason' => "Nhập hàng tự động vào lô DEFAULT từ đơn nhập #{$orderCode} (sản phẩm đã chuyển sang quản lý theo lô)",
                 'transaction_type' => 'import',
                 'user_id' => Auth::id(),
+                'reference_id' => $order->id,
+                'reference_type' => get_class($order),
             ]);
             
             // Sync warehouse stock từ batch

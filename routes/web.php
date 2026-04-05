@@ -53,6 +53,44 @@ require __DIR__.'/route/widget.php';
 // Frontend API routes
 use App\Http\Controllers\Frontend\Cart\CartController;
 
+// Frontend Auth Routes (Customers)
+use App\Http\Controllers\Frontend\Auth\Customer\LoginController as CustomerLogin;
+use App\Http\Controllers\Frontend\Auth\Customer\RegisterController as CustomerRegister;
+use App\Http\Controllers\Frontend\Auth\Customer\LogoutController as CustomerLogout;
+use App\Http\Controllers\Frontend\Customer\ProfileController;
+use App\Http\Controllers\Frontend\Checkout\CheckoutController;
+
+Route::middleware('guest:customer')->group(function () {
+    Route::get('signin', [CustomerLogin::class, 'show'])->name('signin');
+    Route::post('signin', [CustomerLogin::class, 'login'])->name('signin.action');
+    Route::get('signup', [CustomerRegister::class, 'show'])->name('signup');
+    Route::post('signup', [CustomerRegister::class, 'register'])->name('signup.action');
+});
+
+Route::middleware('auth:customer')->group(function () {
+    Route::post('signout', [CustomerLogin::class, 'logout'])->name('signout');
+
+    // Customer Profile Routes
+    Route::group(['prefix' => 'customer', 'as' => 'customer.'], function () {
+        Route::get('/profile', [ProfileController::class, 'index'])->name('profile');
+        Route::post('/profile', [ProfileController::class, 'update'])->name('profile.update');
+        Route::get('/change-password', [ProfileController::class, 'password'])->name('password');
+        Route::post('/change-password', [ProfileController::class, 'updatePassword'])->name('password.update');
+        Route::get('/orders', [ProfileController::class, 'orders'])->name('orders');
+    });
+
+    // Checkout Routes (Simplified)
+    Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout');
+    Route::post('/checkout', [CheckoutController::class, 'process'])->name('checkout.process');
+    Route::get('/checkout/payment/{orderCode}', [CheckoutController::class, 'payment'])->name('checkout.payment');
+    Route::get('/checkout/success/{orderCode}', [CheckoutController::class, 'success'])->name('checkout.success');
+});
+
+// Checkout Page View (Canonical)
+Route::middleware('auth:customer')->group(function () {
+    Route::get('thanh-toan.html', [CheckoutController::class, 'index'])->name('checkout.page');
+});
+
 Route::prefix('cart')->name('cart.')->group(function () {
     Route::get('/', [CartController::class, 'index'])->name('index');
     Route::post('add', [CartController::class, 'store'])->name('add');
@@ -63,8 +101,10 @@ Route::prefix('cart')->name('cart.')->group(function () {
     Route::post('apply-voucher', [CartController::class, 'applyVoucher'])->name('applyVoucher');
 });
 
-// Cart Page View
-Route::get('gio-hang.html', [CartController::class, 'view'])->name('cart.page');
+// Cart Page View (Protected)
+Route::middleware('auth:customer')->group(function () {
+    Route::get('gio-hang.html', [CartController::class, 'view'])->name('cart.page');
+});
 
 
 // Frontend Router - Catch canonical URLs (must be last)

@@ -75,16 +75,17 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
         $totalStock = $batch->warehouseStocks->sum('stock_quantity');
         $firstWarehouse = $batch->warehouseStocks->firstWhere('stock_quantity', '>', 0);
 
-        $warehouseDistribution = $batch->warehouseStocks
-            ->where('stock_quantity', '>', 0)
-            ->map(function ($ws) {
-                return [
-                    'warehouse_id' => $ws->warehouse_id,
-                    'warehouse_name' => $ws->warehouse?->name ?? 'Chưa xác định',
-                    'stock_quantity' => (int) $ws->stock_quantity,
-                ];
-            })
-            ->values();
+        // Get all warehouses to ensure we show all options in the distribution list
+        $allWarehouses = $this->warehouseRepo->getModel()->orderBy('name')->get();
+
+        $warehouseDistribution = $allWarehouses->map(function ($warehouse) use ($batch) {
+            $ws = $batch->warehouseStocks->firstWhere('warehouse_id', $warehouse->id);
+            return [
+                'warehouse_id' => $warehouse->id,
+                'warehouse_name' => $warehouse->name,
+                'stock_quantity' => $ws ? (int) $ws->stock_quantity : 0,
+            ];
+        })->values();
 
         return [
             'id' => $batch->id,
@@ -564,12 +565,16 @@ class ProductBatchService extends BaseCacheService implements ProductBatchServic
         }
 
         $totalStock = $batch->warehouseStocks->sum('stock_quantity');
-        $warehouseDistribution = $batch->warehouseStocks->map(function ($bw) {
+        
+        // Ensure all warehouses are included in distribution for the detail view/modal
+        $allWarehouses = $this->warehouseRepo->getModel()->orderBy('name')->get();
+        $warehouseDistribution = $allWarehouses->map(function ($w) use ($batch) {
+            $bw = $batch->warehouseStocks->firstWhere('warehouse_id', $w->id);
             return [
-                'warehouse_id' => $bw->warehouse_id,
-                'warehouse_name' => $bw->warehouse?->name ?? 'Chưa xác định',
-                'stock_quantity' => (int) ($bw->stock_quantity ?? 0),
-                'batch_id' => $bw->product_batch_id,
+                'warehouse_id' => $w->id,
+                'warehouse_name' => $w->name,
+                'stock_quantity' => $bw ? (int) $bw->stock_quantity : 0,
+                'batch_id' => $batch->id,
             ];
         })->values();
 

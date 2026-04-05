@@ -101,6 +101,7 @@ class SubtractBatchStocksPipe extends AbstractReturnImportOrderPipe
                     }
                     
                     $this->subtractBatchWarehouseStock(
+                        $payload->order,
                         $batchId, 
                         $payload->warehouseId, 
                         $allocQuantity, 
@@ -125,6 +126,7 @@ class SubtractBatchStocksPipe extends AbstractReturnImportOrderPipe
                     $take = min($remainingQty, (int)$stock->stock_quantity);
                     
                     $this->subtractBatchWarehouseStock(
+                        $payload->order,
                         $stock->product_batch_id,
                         $stock->warehouse_id,
                         $take,
@@ -213,6 +215,7 @@ class SubtractBatchStocksPipe extends AbstractReturnImportOrderPipe
     }
     
     protected function subtractBatchWarehouseStock(
+        $order,
         int $batchId, 
         int $warehouseId, 
         int $quantity, 
@@ -291,6 +294,8 @@ class SubtractBatchStocksPipe extends AbstractReturnImportOrderPipe
                 'reason' => "Trả hàng NCC từ đơn #{$returnCode} - Lô: {$batchCode}",
                 'transaction_type' => 'return',
                 'user_id' => Auth::id(),
+                'reference_id' => $order->id,
+                'reference_type' => get_class($order),
             ]);
             
             Log::info("SubtractBatchStocksPipe - Batch stock log created", [

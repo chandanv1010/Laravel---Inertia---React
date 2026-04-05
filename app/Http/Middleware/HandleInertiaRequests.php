@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -51,7 +52,10 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
-            'auth' => ['user' => $request->user()],
+            'auth' => [
+                'user' => Auth::guard('web')->user(),
+                'customer' => Auth::guard('customer')->user(),
+            ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'flash' => [
                 'success' => $request->session()->get('success'),
@@ -68,6 +72,10 @@ class HandleInertiaRequests extends Middleware
             'settings' => $isFrontend ? $this->systemService->getAllConfig() : null,
             'categories' => $isFrontend ? $this->productCatalogueService->getDropdownWithHierarchy() : null,
             'menus' => $isFrontend ? $this->getMenusForFrontend() : null,
+            'translations' => [
+                'frontend' => __('frontend'),
+            ],
+            'url' => $request->path() ? '/' . $request->path() : '/',
         ];
     }
 

@@ -16,6 +16,8 @@ import { WarehouseBatchListModal } from "./warehouse-batch-list-modal"
 export interface WarehouseStock {
     warehouse_id: string | number
     stock_quantity: number
+    trading_quantity?: number
+    incoming_quantity?: number
     storage_location?: string
 }
 
@@ -155,9 +157,9 @@ export function WarehouseStockManager({
         // First, add all existing stocks from database (preserve quantities)
         for (const s of base) {
             map.set(String(s.warehouse_id), {
+                ...s, // spread all fields including trading_quantity, incoming_quantity
                 warehouse_id: s.warehouse_id,
-                stock_quantity: s.stock_quantity ?? 0, // Preserve actual quantity from DB
-                storage_location: s.storage_location
+                stock_quantity: s.stock_quantity ?? 0,
             })
         }
 
@@ -195,8 +197,8 @@ export function WarehouseStockManager({
     }
 
     const openAdjustModal = (index: number) => {
-        // Check if trackInventory is enabled and saved
-        if (isEdit && editMode === "adjust" && (!trackInventory || trackInventorySaved === false)) {
+        // Only allow adjustment if trackInventory is currently checked
+        if (isEdit && editMode === "adjust" && !trackInventory) {
             // Show warning dialog
             setShowTrackInventoryWarning(true)
             return
@@ -211,7 +213,7 @@ export function WarehouseStockManager({
     }
 
     const openStockAdjustment = (index: number) => {
-        if ((!trackInventory || trackInventorySaved === false) && editMode === "adjust" && isEdit) {
+        if (!trackInventory && editMode === "adjust" && isEdit) {
             setShowTrackInventoryWarning(true)
             return
         }
@@ -518,13 +520,19 @@ export function WarehouseStockManager({
                     ) : (
                         <div className="grid grid-cols-12 gap-3 items-center pb-2 border-b">
                             <div className="col-span-3">
-                                <Label className="font-normal text-xs text-muted-foreground">Tên kho</Label>
+                                <Label className="font-normal text-xs text-muted-foreground">Kho lưu trữ</Label>
                             </div>
-                            <div className="col-span-3">
+                            <div className="col-span-2 flex items-center justify-center">
                                 <Label className="font-normal text-xs text-muted-foreground">Tồn kho</Label>
                             </div>
-                            <div className="col-span-5">
-                                <Label className="font-normal text-xs text-muted-foreground">Vị trí lưu kho</Label>
+                            <div className="col-span-2 flex items-center justify-center">
+                                <Label className="font-normal text-xs text-muted-foreground">Hàng đang về</Label>
+                            </div>
+                            <div className="col-span-2 flex items-center justify-center">
+                                <Label className="font-normal text-xs text-muted-foreground">Đang giao dịch</Label>
+                            </div>
+                            <div className="col-span-2 flex items-center justify-center">
+                                <Label className="font-normal text-xs text-muted-foreground">Có thể bán</Label>
                             </div>
                             <div className="col-span-1"></div>
                         </div>
@@ -552,7 +560,6 @@ export function WarehouseStockManager({
                                         className="h-7 rounded-md px-2 text-[12px] font-normal text-slate-700 border-slate-200 bg-white hover:bg-slate-50 !cursor-pointer"
                                         onClick={() => {
                                             if (onStockClick) {
-                                                console.log("onStockClick is present")
                                                 onStockClick({
                                                     warehouse_id: stock.warehouse_id,
                                                     stock_quantity: stock.stock_quantity ?? 0,
@@ -571,18 +578,18 @@ export function WarehouseStockManager({
                                         </span>
                                     </Button>
                                 </div>
-                                <div className="col-span-2 flex items-center justify-center text-sm">{0}</div>
-                                <div className="col-span-2 flex items-center justify-center text-sm">{0}</div>
-                                <div className="col-span-2 flex items-center justify-center text-sm">{stock.stock_quantity ?? 0}</div>
+                                <div className="col-span-2 flex items-center justify-center text-sm">{stock.incoming_quantity || 0}</div>
+                                <div className="col-span-2 flex items-center justify-center text-sm font-medium text-orange-600">{stock.trading_quantity || 0}</div>
+                                <div className="col-span-2 flex items-center justify-center text-sm font-medium text-green-600">{Math.max(0, (stock.stock_quantity ?? 0) - (stock.trading_quantity ?? 0))}</div>
                             </div>
                         ) : (
-                            <div key={index} className="grid grid-cols-12 gap-3 items-center">
+                            <div key={index} className="grid grid-cols-12 gap-3 items-center py-1">
                                 <div className="col-span-3">
                                     <div className="font-normal text-sm py-2">
                                         {getWarehouseName(stock.warehouse_id)}
                                     </div>
                                 </div>
-                                <div className="col-span-3">
+                                <div className="col-span-2 flex justify-center">
                                     <NumberInput
                                         value={stock.stock_quantity}
                                         onValueChange={(v) => handleStockChange(index, v)}
@@ -591,27 +598,9 @@ export function WarehouseStockManager({
                                         data-testid={`warehouse-stock-${index}-qty`}
                                     />
                                 </div>
-                                <div className="col-span-5 flex gap-2">
-                                    <Input
-                                        value={stock.storage_location || ""}
-                                        readOnly
-                                        placeholder="Nhập vị trí lưu kho (VD: A-D10-K456)"
-                                        className="font-normal cursor-pointer"
-                                        onClick={() => handleOpenStorageLocationModal(index)}
-                                        data-testid={`warehouse-stock-${index}-location`}
-                                    />
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={() => handleOpenStorageLocationModal(index)}
-                                        className="shrink-0 cursor-pointer"
-                                        title="Mở modal nhập vị trí lưu kho"
-                                        data-testid={`warehouse-stock-${index}-location-open`}
-                                    >
-                                        ...
-                                    </Button>
-                                </div>
+                                <div className="col-span-2 flex items-center justify-center text-sm text-muted-foreground">{stock.incoming_quantity || 0}</div>
+                                <div className="col-span-2 flex items-center justify-center text-sm font-medium text-orange-600">{stock.trading_quantity || 0}</div>
+                                <div className="col-span-2 flex items-center justify-center text-sm font-medium text-green-600">{Math.max(0, (stock.stock_quantity ?? 0) - (stock.trading_quantity ?? 0))}</div>
                                 <div className="col-span-1 flex justify-end">
                                     <Button
                                         type="button"

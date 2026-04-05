@@ -78,6 +78,8 @@ class ConvertVariantsBasicToBatchPipe extends AbstractProductManagementTypeChang
                         'reason' => 'Chuyển đổi từ quản lý thông thường sang quản lý theo lô',
                         'user_id' => Auth::id(),
                         'transaction_type' => 'adjust',
+                        'reference_id' => $payload->productId,
+                        'reference_type' => get_class($payload->product),
                     ]);
 
                     // Xóa warehouse stock (set về 0)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, Gift, Ticket } from 'lucide-react';
+import { Trash2, Gift, Ticket, Loader2 } from 'lucide-react';
 import { useCart } from '@/contexts/cart-context';
 import CartItemRow from './cart-item-row';
 import VoucherList from './voucher-list';
@@ -8,12 +8,14 @@ import GenericSlider from '../sliders/generic-slider';
 
 interface CartSidebarProps {
     promoProducts?: any[];
+    onCheckout?: () => void;
+    isProcessing?: boolean;
 }
 
-export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
+export default function CartSidebar({ promoProducts = [], onCheckout, isProcessing }: CartSidebarProps) {
     const { cart, cartItems, cartTotal, discountTotal, finalTotal, removeFromCart, addToCart, clearCart } = useCart();
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
-    
+
     const groupedCartItems = React.useMemo(() => {
         const groups: { [key: string]: any } = {};
         const result: any[] = [];
@@ -57,23 +59,23 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
         }
 
         const currentIds = cartItems.map(i => i.row_id);
-        
+
         setSelectedItems(prev => {
             // 1. Initial load or refresh from empty state: select all
             if (prev.length === 0) return currentIds;
 
             // 2. Filter out IDs no longer in cart
-            const valid = prev.filter(id => currentIds.includes(id));
-            
+            const valid = prev.filter((id: string) => currentIds.includes(id));
+
             // 3. Auto-select NEW items (added from detail page or buy-X-get-Y)
-            const news = currentIds.filter(id => !prev.includes(id));
+            const news = currentIds.filter((id: string) => !prev.includes(id));
 
             // 4. Auto-select reward rows if their parent is selected
             const rewardsToSelect = cartItems.filter(item => {
                 if (!item.promo_id || nextIncluded(valid, news, item.row_id)) return false;
-                const parent = cartItems.find(i => 
-                    i.product_id === item.product_id && 
-                    (i.variant_id ?? 0) === (item.variant_id ?? 0) && 
+                const parent = cartItems.find(i =>
+                    i.product_id === item.product_id &&
+                    (i.variant_id ?? 0) === (item.variant_id ?? 0) &&
                     !i.promo_id
                 );
                 return parent && nextIncluded(valid, news, parent.row_id);
@@ -82,7 +84,7 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
             const next = Array.from(new Set([...valid, ...news, ...rewardsToSelect]));
 
             // Prevent redundant state updates
-            if (next.length === prev.length && next.every(id => prev.includes(id))) {
+            if (next.length === prev.length && next.every((id: string) => prev.includes(id))) {
                 return prev;
             }
             return next;
@@ -106,15 +108,15 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
         const item = groupedCartItems.find(i => i.row_id === rowId);
         if (item?.is_combo_group) {
             const childIds = item.child_row_ids;
-            const allSelected = childIds.every(id => selectedItems.includes(id));
+            const allSelected = childIds.every((id: string) => selectedItems.includes(id));
             if (allSelected) {
-                setSelectedItems(selectedItems.filter(id => !childIds.includes(id)));
+                setSelectedItems(selectedItems.filter((id: string) => !childIds.includes(id)));
             } else {
                 setSelectedItems(Array.from(new Set([...selectedItems, ...childIds])));
             }
         } else {
             if (selectedItems.includes(rowId)) {
-                setSelectedItems(selectedItems.filter(id => id !== rowId));
+                setSelectedItems(selectedItems.filter((id: string) => id !== rowId));
             } else {
                 setSelectedItems([...selectedItems, rowId]);
             }
@@ -235,7 +237,7 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
                         <CartItemRow
                             key={item.row_id}
                             item={item}
-                            isSelected={item.is_combo_group 
+                            isSelected={item.is_combo_group
                                 ? item.child_row_ids.every((id: string) => selectedItems.includes(id))
                                 : selectedItems.includes(item.row_id)
                             }
@@ -289,7 +291,7 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
                                 </span>
                                 <span className="text-red-600">-{formatPrice(discountTotal)}</span>
                             </div>
-                            
+
                             {/* Detailed Breakdown */}
                             <div className="ml-4 space-y-1">
                                 {cart?.summary?.discount_breakdown?.map((item: any, idx: number) => (
@@ -311,7 +313,12 @@ export default function CartSidebar({ promoProducts = [] }: CartSidebarProps) {
                     </div>
                 </div>
 
-                <button className="w-full bg-black text-white py-3.5 rounded-xl font-bold text-lg hover:bg-gray-800 transition-transform active:scale-[0.98] shadow-lg shadow-gray-200">
+                <button
+                    onClick={onCheckout}
+                    disabled={isProcessing}
+                    className="w-full bg-black text-white py-3.5 rounded-xl font-bold text-lg hover:bg-gray-800 transition-transform active:scale-[0.98] shadow-lg shadow-gray-200 flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                    {isProcessing && <Loader2 className="animate-spin" size={20} />}
                     Thanh toán ngay
                 </button>
             </div>

@@ -199,7 +199,7 @@ export default function ProductCatalogueIndex({
 
             if (isChecked) {
                 // Uncheck -> Uncheck self and all descendants
-                let newSelected = prev.filter(id => id !== catId && !descendants.includes(id));
+                let newSelected = prev.filter((id: number) => id !== catId && !descendants.includes(id));
 
                 // ALSO: Check if any ancestor needs to be unchecked
                 // If I am unchecking a child, my parent is no longer "fully selected" (if that's the logic)
@@ -220,7 +220,7 @@ export default function ProductCatalogueIndex({
                         const curr = allCategories.find(c => c.id === pid);
                         currParentId = curr?.parent_id;
                     }
-                    newSelected = newSelected.filter(id => !ancestors.includes(id));
+                    newSelected = newSelected.filter((id: number) => !ancestors.includes(id));
                 }
 
                 return newSelected;
@@ -241,7 +241,7 @@ export default function ProductCatalogueIndex({
                     const siblings = allCategories.filter(c => c.parent_id === parentId).map(c => c.id);
 
                     // Check if all siblings are in the newSelectedIds list
-                    const allSiblingsChecked = siblings.every(id => newSelectedIds.includes(id));
+                    const allSiblingsChecked = siblings.every((id: number) => newSelectedIds.includes(id));
 
                     if (allSiblingsChecked) {
                         if (!newSelectedIds.includes(parentId)) {

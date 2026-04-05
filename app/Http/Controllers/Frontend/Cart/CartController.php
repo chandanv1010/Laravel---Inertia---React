@@ -21,8 +21,11 @@ class CartController extends Controller
     public function view()
     {
         $promoProducts = $this->productService->getPromotionalProducts(5);
+        $customer = \Illuminate\Support\Facades\Auth::guard('customer')->user();
+        
         return \Inertia\Inertia::render('frontend/cart/index', [
-            'promoProducts' => $promoProducts
+            'promoProducts' => $promoProducts,
+            'customer' => $customer
         ]);
     }
 

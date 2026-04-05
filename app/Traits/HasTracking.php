@@ -98,7 +98,7 @@ trait HasTracking
     /**
      * Track failed action
      */
-    protected function trackFailed(string $action, string $module, $record = null, string $errorMessage, array $data = []): bool
+    protected function trackFailed(string $action, string $module, $record, string $errorMessage, array $data = []): bool
     {
         $trackData = array_merge($data, [
             'description' => $data['description'] ?? "Thao tác {$action} {$module} thất bại",

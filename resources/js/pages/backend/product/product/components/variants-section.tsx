@@ -243,63 +243,16 @@ export function VariantsSection({
                                             const stocksWithQuantity = warehouseStocks.filter(ws => (ws.stock_quantity || 0) > 0)
                                             const hasDistribution = stocksWithQuantity.length > 0
 
-                                            // Nếu là batch tracking, chỉ hiển thị (read-only)
-                                            if (managementType === 'batch') {
-                                                // Nếu đã phân bổ (có warehouse_stocks với stock > 0), hiển thị tooltip
-                                                if (hasDistribution) {
-                                                    return (
-                                                        <TooltipProvider>
-                                                            <Tooltip delayDuration={0}>
-                                                                <TooltipTrigger asChild>
-                                                                    <span className="font-medium text-gray-700 cursor-help">
-                                                                        {totalStock}
-                                                                    </span>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent className="bg-gray-900 text-white p-3 max-w-xs">
-                                                                    <div className="space-y-1.5">
-                                                                        <div className="font-semibold mb-2">Phân bổ tồn kho:</div>
-                                                                        {stocksWithQuantity.map((ws) => {
-                                                                            const warehouseName = warehouses.find(w => String(w.value) === String(ws.warehouse_id))?.label || `Kho #${ws.warehouse_id}`
-                                                                            return (
-                                                                                <div key={ws.warehouse_id} className="flex justify-between items-center gap-4 text-sm">
-                                                                                    <span>{warehouseName}</span>
-                                                                                    <span className="font-medium">{ws.stock_quantity || 0}</span>
-                                                                                </div>
-                                                                            )
-                                                                        })}
-                                                                        <div className="border-t border-gray-700 pt-1.5 mt-1.5 flex justify-between items-center text-sm font-semibold">
-                                                                            <span>Tổng cộng:</span>
-                                                                            <span>{totalStock}</span>
-                                                                        </div>
-                                                                    </div>
-                                                                </TooltipContent>
-                                                            </Tooltip>
-                                                        </TooltipProvider>
-                                                    )
-                                                }
-                                                return <span className="font-medium text-gray-700">{totalStock}</span>
-                                            }
-
-                                            // Nếu không phải batch tracking, cho phép input
-                                            // Nhưng nếu đã phân bổ, vẫn hiển thị tooltip khi hover
+                                            // Luôn hiển thị dạng Text (Read-only) cho cột Tồn kho trong bảng phiên bản
+                                            // theo yêu cầu để đảm bảo tính nhất quán (sửa phải vào từng bản ghi)
                                             if (hasDistribution) {
                                                 return (
                                                     <TooltipProvider>
                                                         <Tooltip delayDuration={0}>
                                                             <TooltipTrigger asChild>
-                                                                <div
-                                                                    onClick={(e) => e.stopPropagation()}
-                                                                    onMouseDown={(e) => e.stopPropagation()}
-                                                                    onMouseMove={(e) => e.stopPropagation()}
-                                                                    className="cursor-help"
-                                                                >
-                                                                    <NumberInput
-                                                                        value={variant.stock_quantity ?? 0}
-                                                                        onValueChange={(v) => updateVariant(index, 'stock_quantity', v ?? 0)}
-                                                                        className="h-8 font-normal"
-                                                                        placeholder="0"
-                                                                    />
-                                                                </div>
+                                                                <span className="font-medium text-gray-700 cursor-help">
+                                                                    {totalStock}
+                                                                </span>
                                                             </TooltipTrigger>
                                                             <TooltipContent className="bg-gray-900 text-white p-3 max-w-xs">
                                                                 <div className="space-y-1.5">
@@ -324,20 +277,7 @@ export function VariantsSection({
                                                 )
                                             }
 
-                                            return (
-                                                <div
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    onMouseDown={(e) => e.stopPropagation()}
-                                                    onMouseMove={(e) => e.stopPropagation()}
-                                                >
-                                                    <NumberInput
-                                                        value={variant.stock_quantity ?? 0}
-                                                        onValueChange={(v) => updateVariant(index, 'stock_quantity', v ?? 0)}
-                                                        className="h-8 font-normal"
-                                                        placeholder="0"
-                                                    />
-                                                </div>
-                                            )
+                                            return <span className="font-medium text-gray-700">{totalStock}</span>
                                         })()}
                                     </TableCell>
                                     <TableCell>

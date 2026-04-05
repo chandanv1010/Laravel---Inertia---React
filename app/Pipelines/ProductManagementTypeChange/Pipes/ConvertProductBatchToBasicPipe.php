@@ -69,6 +69,8 @@ class ConvertProductBatchToBasicPipe extends AbstractProductManagementTypeChange
                 'reason' => 'Chuyển đổi từ quản lý theo lô sang quản lý thông thường',
                 'transaction_type' => 'adjust',
                 'user_id' => Auth::id(),
+                'reference_id' => $payload->productId,
+                'reference_type' => get_class($payload->product),
             ]);
 
             // Xóa tất cả batch warehouse stocks (set về 0) với lock
@@ -97,6 +99,8 @@ class ConvertProductBatchToBasicPipe extends AbstractProductManagementTypeChange
                     'reason' => 'Chuyển đổi từ quản lý theo lô sang quản lý thông thường',
                     'user_id' => Auth::id(),
                     'transaction_type' => 'adjust',
+                    'reference_id' => $payload->productId,
+                    'reference_type' => get_class($payload->product),
                 ]);
             }
         }

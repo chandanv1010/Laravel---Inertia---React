@@ -10,6 +10,8 @@ use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 use App\Http\Resources\ApiResource;
 use Illuminate\Http\Response;
 use App\Http\Middleware\SetBackendLocale;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -29,6 +31,14 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
+
+        $middleware->redirectUsersTo(fn (Request $request) => 
+            Auth::guard('customer')->check() ? '/' : '/dashboard'
+        );
+
+        $middleware->redirectGuestsTo(fn (Request $request) => 
+            $request->is('customer/*') || $request->is('gio-hang.html') ? route('signin') : route('login')
+        );
     })
     ->withExceptions(function (Exceptions $exceptions) {
         

@@ -117,7 +117,7 @@ export default function UserCatalogueSave({record, permissions}: UserCatalogueSa
             setSelectedPermissions(prev => [...prev, permissionId])
         }else{
             const currentSelected = [...selectedPermissions]
-            const newSelected = currentSelected.filter(id => id !== permissionId)
+            const newSelected = currentSelected.filter((id: number) => id !== permissionId)
             setSelectedPermissions(newSelected)
         }
     }
@@ -129,7 +129,7 @@ export default function UserCatalogueSave({record, permissions}: UserCatalogueSa
         if(checked){
             newPermissions = [...currentPermissions, ...modulePermissionId]
         }else{
-            newPermissions = currentPermissions.filter(id => !modulePermissionId.includes(id))
+            newPermissions = currentPermissions.filter((id: number) => !modulePermissionId.includes(id))
         }
         setSelectedPermissions(newPermissions)
     }

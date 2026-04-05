@@ -36,7 +36,7 @@ export default function CategoryDropdown() {
         <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <DropdownMenuTrigger asChild>
                 <Button
-                    className="justify-between bg-emerald-500 hover:bg-emerald-600 text-white h-11 px-4 gap-2 cursor-pointer"
+                    className="justify-between bg-[#1C8EB8] hover:bg-[#157294] text-white h-11 px-4 gap-2 cursor-pointer transition-colors shadow-sm"
                     style={{ borderRadius: '5px' }}
                 >
                     <LayoutGrid className="h-4 w-4" />
@@ -45,7 +45,7 @@ export default function CategoryDropdown() {
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-                className="w-[440px] p-4"
+                className="w-[440px] p-4 border-zinc-200 shadow-xl"
                 align="start"
                 sideOffset={8}
                 style={{ borderRadius: '5px' }}
@@ -58,7 +58,7 @@ export default function CategoryDropdown() {
                                 <Link
                                     key={cat.id}
                                     href={buildCategoryUrl(cat.canonical, urlType)}
-                                    className="flex flex-col items-center p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer group"
+                                    className="flex flex-col items-center p-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer group"
                                 >
                                     <div className="w-10 h-10 mb-2 flex items-center justify-center">
                                         <img
@@ -71,7 +71,7 @@ export default function CategoryDropdown() {
                                             }}
                                         />
                                     </div>
-                                    <span className="text-xs text-center font-medium text-gray-700 group-hover:text-emerald-600 line-clamp-2">
+                                    <span className="text-xs text-center font-bold text-slate-700 group-hover:text-[#1C8EB8] line-clamp-2">
                                         {cat.name}
                                     </span>
                                 </Link>

@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Search, Pencil, Loader2 } from "lucide-react"
-import { format, parseISO, isBefore } from "date-fns"
+import { parseISO, isBefore } from "date-fns"
 import { useState, useMemo, useCallback, useEffect } from "react"
 import { toast } from "sonner"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -62,7 +62,6 @@ export function WarehouseBatchListModal({
     const [adjustWarehouseId, setAdjustWarehouseId] = useState<string | number>("")
     const [saving, setSaving] = useState(false)
 
-    // Helper to get cookie
     const getCookie = useCallback((name: string) => {
         if (typeof document === "undefined") return ""
         const cookie = document.cookie
@@ -78,7 +77,6 @@ export function WarehouseBatchListModal({
         }
     }, [])
 
-    // API fetch helper
     const apiFetch = useCallback(async (url: string, init: RequestInit = {}) => {
         const method = (init.method || "GET").toUpperCase()
         const metaToken =
@@ -107,15 +105,11 @@ export function WarehouseBatchListModal({
         })
     }, [getCookie])
 
-    // Fetch batches
     const fetchBatches = useCallback(async () => {
         if (!productId) return
         setIsLoading(true)
         try {
-            // Nếu là variant, PHẢI dùng endpoint variant batches
-            // Khi isVariant=true, dùng productId làm variantId (vì productId được truyền là variant.id)
             const actualVariantId = variantId || productId
-            // Fetch all batches for the product/variant, we'll filter by warehouse locally
             const url = isVariant
                 ? `/backend/product-variant/${actualVariantId}/batches?_t=${Date.now()}`
                 : `/backend/product/${productId}/batches?_t=${Date.now()}`
@@ -123,16 +117,12 @@ export function WarehouseBatchListModal({
             if (response.ok) {
                 const data = await response.json()
                 const allBatches = data.data || []
-                // Filter by warehouse: hiển thị batches có stock trong kho này
-                // Với cấu trúc mới, dùng warehouse_distribution để check
                 const warehouseBatches = allBatches.filter((b: Batch) => {
-                    // New structure: check warehouse_distribution
                     if (b.warehouse_distribution && b.warehouse_distribution.length > 0) {
                         return b.warehouse_distribution.some(
-                            wd => String(wd.warehouse_id) === String(warehouseId) && wd.stock_quantity > 0
+                            wd => String(wd.warehouse_id) === String(warehouseId)
                         )
                     }
-                    // Legacy fallback: check warehouse_id directly
                     return b.warehouse_id === null || String(b.warehouse_id) === String(warehouseId)
                 })
                 setBatches(warehouseBatches)
@@ -149,9 +139,8 @@ export function WarehouseBatchListModal({
         if (open) {
             fetchBatches()
         }
-    }, [open, fetchBatches, isVariant, variantId])
+    }, [open, fetchBatches])
 
-    // Helper: status
     const getBatchStatus = (batch: Batch) => {
         if (!batch.expired_at) return { label: "Còn hạn", className: "bg-emerald-50 text-emerald-600 border-emerald-100" }
         try {
@@ -169,37 +158,27 @@ export function WarehouseBatchListModal({
         return batches.filter(b => b.code.toLowerCase().includes(q))
     }, [batches, searchQuery])
 
-    // Adjust Logic
     const handleOpenAdjust = (batch: Batch) => {
         setEditingBatchId(batch.id)
-        // Lấy warehouse đầu tiên có số lượng > 0 hoặc warehouse hiện tại
         const warehouseDist = batch.warehouse_distribution || []
-        const firstWarehouse = warehouseDist.length > 0 
-            ? warehouseDist[0] 
-            : null
+        const currentWh = warehouseDist.find(wd => String(wd.warehouse_id) === String(warehouseId)) || warehouseDist[0] || null
         
-        const selectedWarehouseId = firstWarehouse?.warehouse_id || batch.warehouse_id || warehouseId || ""
+        const selectedWarehouseId = currentWh?.warehouse_id || batch.warehouse_id || warehouseId || ""
         setAdjustWarehouseId(selectedWarehouseId)
         
-        // Hiển thị tồn kho của kho được chọn
-        const selectedWarehouseStock = warehouseDist.find(w => w.warehouse_id === selectedWarehouseId)?.stock_quantity || batch.stock_quantity
+        const selectedWarehouseStock = warehouseDist.find(w => w.warehouse_id === selectedWarehouseId)?.stock_quantity || (String(batch.warehouse_id) === String(selectedWarehouseId) ? batch.stock_quantity : 0)
         setAdjustValue(String(selectedWarehouseStock))
         setAdjustDelta("0")
         setAdjustReason("Thực tế")
     }
 
     const handleSaveAdjust = async (batchId: number) => {
-        const batch = batches.find(b => b.id === batchId)
-        if (!batch) return
-
         if (!adjustWarehouseId) {
             toast.error('Vui lòng chọn kho')
             return
         }
-
         const n = Number(adjustValue)
         if (Number.isNaN(n) || n < 0) return
-
         setSaving(true)
         try {
             const response = await apiFetch(`/backend/product-batches/${batchId}`, {
@@ -210,13 +189,11 @@ export function WarehouseBatchListModal({
                     reason: adjustReason
                 }),
             })
-
             if (response.ok) {
                 toast.success('Cập nhật tồn kho thành công')
                 setEditingBatchId(null)
-                setAdjustWarehouseId("")
                 await fetchBatches()
-                onRefresh?.() // Notify parent to refresh general layout if needed
+                onRefresh?.()
             } else {
                 const error = await response.json()
                 toast.error(error.message || 'Có lỗi xảy ra')
@@ -248,7 +225,6 @@ export function WarehouseBatchListModal({
                 </DialogHeader>
 
                 <div className="flex flex-col min-h-0 overflow-hidden">
-                    {/* Controls & Filter */}
                     <div className="px-6 py-4 space-y-3 shrink-0">
                         <div className="flex items-center gap-4">
                             <div className="flex-1 relative">
@@ -264,18 +240,8 @@ export function WarehouseBatchListModal({
                                 Chi nhánh: {warehouseName}
                             </div>
                         </div>
-
-                        <div className="flex gap-2">
-                            <Badge
-                                variant="secondary"
-                                className="bg-blue-50 text-blue-700 hover:bg-blue-50 rounded-full px-3 py-1 font-normal border-0"
-                            >
-                                Chi nhánh: {warehouseName}
-                            </Badge>
-                        </div>
                     </div>
 
-                    {/* Table - Full Width */}
                     <div className="flex-1 overflow-auto border-t">
                         <Table>
                             <TableHeader>
@@ -317,14 +283,10 @@ export function WarehouseBatchListModal({
                                                 </TableCell>
                                                 <TableCell className="text-right py-3">
                                                     {(() => {
-                                                        // Hiển thị tồn kho cho kho đang xem
                                                         if (batch.warehouse_distribution && batch.warehouse_distribution.length > 0) {
-                                                            const warehouseStock = batch.warehouse_distribution.find(
-                                                                wd => String(wd.warehouse_id) === String(warehouseId)
-                                                            )
-                                                            return warehouseStock?.stock_quantity || 0
+                                                            const ws = batch.warehouse_distribution.find(wd => String(wd.warehouse_id) === String(warehouseId))
+                                                            return ws?.stock_quantity || 0
                                                         }
-                                                        // Legacy fallback
                                                         return batch.stock_quantity
                                                     })()}
                                                 </TableCell>
@@ -338,36 +300,35 @@ export function WarehouseBatchListModal({
                                                                 <Pencil className="h-4 w-4 text-gray-400" />
                                                             </Button>
                                                         </PopoverTrigger>
-                                                        <PopoverContent className="w-80" align="end">
+                                                        <PopoverContent className="w-80 p-6 shadow-xl border-gray-100" align="end">
                                                             <div className="space-y-4">
                                                                 <div>
-                                                                    <div className="text-sm text-gray-600 mb-1">
-                                                                        <span className="text-blue-600 font-medium">{batch.code}</span>
+                                                                    <div className="text-sm text-gray-600 mb-1 flex items-center justify-between">
+                                                                        <span className="text-blue-600 font-bold uppercase text-xs tracking-wider">Đang điều chỉnh</span>
+                                                                        <Badge className="bg-blue-100 text-blue-700 border-none font-bold text-[10px]">{batch.code}</Badge>
                                                                     </div>
-                                                                    <div className="text-xs text-gray-500">
-                                                                        Kho: {(() => {
-                                                                            const warehouseDist = batch.warehouse_distribution || []
-                                                                            const selectedWarehouse = warehouseDist.find(w => w.warehouse_id === adjustWarehouseId)
-                                                                            return selectedWarehouse?.warehouse_name || batch.warehouse_name || 'Chưa xác định'
+                                                                    <div className="text-xs text-gray-500 flex items-center gap-1.5">
+                                                                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                                                                        {(() => {
+                                                                            const dist = batch.warehouse_distribution || []
+                                                                            const sel = dist.find(w => String(w.warehouse_id) === String(adjustWarehouseId))
+                                                                            return sel?.warehouse_name || warehouseName
                                                                         })()}
                                                                     </div>
                                                                 </div>
-                                                                <div>
-                                                                    <Label className="text-xs mb-1.5 block">Chọn kho</Label>
+                                                                <div className="space-y-1.5">
+                                                                    <Label className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">Chọn kho điều chỉnh</Label>
                                                                     <Select 
                                                                         value={String(adjustWarehouseId || '')} 
                                                                         onValueChange={(value) => {
-                                                                            const warehouseDist = batch.warehouse_distribution || []
-                                                                            const selectedWarehouse = warehouseDist.find(w => String(w.warehouse_id) === value)
-                                                                            setAdjustWarehouseId(value || "")
-                                                                            
-                                                                            // Cập nhật tồn kho theo kho được chọn
-                                                                            const currentStock = selectedWarehouse?.stock_quantity || 0
-                                                                            setAdjustValue(String(currentStock))
+                                                                            const dist = batch.warehouse_distribution || []
+                                                                            const sel = dist.find(w => String(w.warehouse_id) === value)
+                                                                            setAdjustWarehouseId(value)
+                                                                            setAdjustValue(String(sel?.stock_quantity || 0))
                                                                             setAdjustDelta("0")
                                                                         }}
                                                                     >
-                                                                        <SelectTrigger className="h-9 w-full">
+                                                                        <SelectTrigger className="h-9">
                                                                             <SelectValue placeholder="Chọn kho" />
                                                                         </SelectTrigger>
                                                                         <SelectContent>
@@ -380,43 +341,42 @@ export function WarehouseBatchListModal({
                                                                     </Select>
                                                                 </div>
                                                                 <div className="grid grid-cols-2 gap-4">
-                                                                    <div>
-                                                                        <Label className="text-xs mb-1.5 block">Điều chỉnh</Label>
+                                                                    <div className="space-y-1.5">
+                                                                        <Label className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">Tăng/Giảm (+/-)</Label>
                                                                         <Input
                                                                             type="number"
                                                                             value={adjustDelta}
                                                                             onChange={e => {
                                                                                 const v = e.target.value
                                                                                 setAdjustDelta(v)
-                                                                                const warehouseDist = batch.warehouse_distribution || []
-                                                                                const selectedWarehouse = warehouseDist.find(w => w.warehouse_id === adjustWarehouseId)
-                                                                                const currentStock = selectedWarehouse?.stock_quantity || 0
-                                                                                const newStock = Math.max(0, currentStock + Number(v))
-                                                                                setAdjustValue(String(newStock))
+                                                                                const dist = batch.warehouse_distribution || []
+                                                                                const sel = dist.find(w => String(w.warehouse_id) === String(adjustWarehouseId))
+                                                                                const curr = sel?.stock_quantity || 0
+                                                                                setAdjustValue(String(Math.max(0, curr + Number(v))))
                                                                             }}
                                                                         />
                                                                     </div>
-                                                                    <div>
-                                                                        <Label className="text-xs mb-1.5 block">Tồn kho mới</Label>
+                                                                    <div className="space-y-1.5">
+                                                                        <Label className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">Tồn mới</Label>
                                                                         <Input
                                                                             type="number"
                                                                             value={adjustValue}
                                                                             onChange={e => {
                                                                                 const v = e.target.value
                                                                                 setAdjustValue(v)
-                                                                                const warehouseDist = batch.warehouse_distribution || []
-                                                                                const selectedWarehouse = warehouseDist.find(w => w.warehouse_id === adjustWarehouseId)
-                                                                                const currentStock = selectedWarehouse?.stock_quantity || 0
-                                                                                setAdjustDelta(String(Number(v) - currentStock))
+                                                                                const dist = batch.warehouse_distribution || []
+                                                                                const sel = dist.find(w => String(w.warehouse_id) === String(adjustWarehouseId))
+                                                                                const curr = sel?.stock_quantity || 0
+                                                                                setAdjustDelta(String(Number(v) - curr))
                                                                             }}
                                                                             min={0}
                                                                         />
                                                                     </div>
                                                                 </div>
-                                                                <div>
-                                                                    <Label className="text-xs mb-1.5 block">Lý do</Label>
+                                                                <div className="space-y-1.5">
+                                                                    <Label className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">Lý do</Label>
                                                                     <Select value={adjustReason} onValueChange={setAdjustReason}>
-                                                                        <SelectTrigger className="h-9 w-full">
+                                                                        <SelectTrigger className="h-9">
                                                                             <SelectValue />
                                                                         </SelectTrigger>
                                                                         <SelectContent>
@@ -427,13 +387,12 @@ export function WarehouseBatchListModal({
                                                                         </SelectContent>
                                                                     </Select>
                                                                 </div>
-                                                                <div className="flex justify-end gap-2">
-                                                                    <Button variant="outline" size="sm" onClick={() => {
+                                                                <div className="flex justify-end gap-2 pt-2">
+                                                                    <Button variant="ghost" size="sm" onClick={() => {
                                                                         setEditingBatchId(null)
-                                                                        setAdjustWarehouseId("")
-                                                                    }}>Hủy</Button>
-                                                                    <Button size="sm" onClick={() => handleSaveAdjust(batch.id)} disabled={saving}>
-                                                                        {saving ? 'Lưu...' : 'Lưu'}
+                                                                    }}>Bỏ qua</Button>
+                                                                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => handleSaveAdjust(batch.id)} disabled={saving}>
+                                                                        {saving ? 'Lưu...' : 'Lưu cập nhật'}
                                                                     </Button>
                                                                 </div>
                                                             </div>
@@ -447,11 +406,14 @@ export function WarehouseBatchListModal({
                             </TableBody>
                         </Table>
                     </div>
-                    {/* Footer */}
-                    <div className="px-6 py-4 border-t bg-gray-50/50">
+
+                    <div className="px-6 py-4 border-t bg-gray-50/50 flex justify-between items-center">
                         <div className="text-xs text-muted-foreground font-medium">
-                            Từ 1 đến {filteredBatches.length} trên tổng {filteredBatches.length}
+                            Tổng {filteredBatches.length} bản ghi lô hàng
                         </div>
+                        <Badge variant="outline" className="bg-white text-gray-400 font-normal">
+                            {warehouseName}
+                        </Badge>
                     </div>
                 </div>
             </DialogContent>

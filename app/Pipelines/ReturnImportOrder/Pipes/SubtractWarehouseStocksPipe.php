@@ -90,16 +90,16 @@ class SubtractWarehouseStocksPipe extends AbstractReturnImportOrderPipe
             if ($payload->warehouseId) {
                 // Direct Warehouse Subtraction
                 if ($variantId) {
-                    $this->subtractVariantWarehouseStock($variantId, $payload->warehouseId, $quantity, $payload->orderCode);
+                    $this->subtractVariantWarehouseStock($payload->order, $variantId, $payload->warehouseId, $quantity, $payload->orderCode);
                 } elseif ($productId) {
-                    $this->subtractProductWarehouseStock($productId, $payload->warehouseId, $quantity, $payload->orderCode);
+                    $this->subtractProductWarehouseStock($payload->order, $productId, $payload->warehouseId, $quantity, $payload->orderCode);
                 }
             } else {
                 // FIFO / Automatic Subtraction (No Warehouse Selected)
                 if ($variantId) {
-                    $this->subtractVariantStockFIFO($variantId, $quantity, $payload->orderCode);
+                    $this->subtractVariantStockFIFO($payload->order, $variantId, $quantity, $payload->orderCode);
                 } elseif ($productId) {
-                    $this->subtractProductStockFIFO($productId, $quantity, $payload->orderCode);
+                    $this->subtractProductStockFIFO($payload->order, $productId, $quantity, $payload->orderCode);
                 }
             }
         }
@@ -107,7 +107,7 @@ class SubtractWarehouseStocksPipe extends AbstractReturnImportOrderPipe
         return $next($payload);
     }
 
-    protected function subtractProductStockFIFO(int $productId, int $quantity, string $returnCode): void
+    protected function subtractProductStockFIFO($order, int $productId, int $quantity, string $returnCode): void
     {
         $warehouseStockRepo = $this->getWarehouseStockRepo();
         
@@ -127,7 +127,7 @@ class SubtractWarehouseStocksPipe extends AbstractReturnImportOrderPipe
             $take = min($remainingQty, (int)$stock->stock_quantity);
             
             // Deduct
-            $this->subtractProductWarehouseStock($productId, $stock->warehouse_id, $take, $returnCode);
+            $this->subtractProductWarehouseStock($order, $productId, $stock->warehouse_id, $take, $returnCode);
             
             $remainingQty -= $take;
         }
@@ -137,7 +137,7 @@ class SubtractWarehouseStocksPipe extends AbstractReturnImportOrderPipe
         }
     }
 
-    protected function subtractVariantStockFIFO(int $variantId, int $quantity, string $returnCode): void
+    protected function subtractVariantStockFIFO($order, int $variantId, int $quantity, string $returnCode): void
     {
         $variantWarehouseStockRepo = $this->getVariantWarehouseStockRepo();
         
@@ -157,7 +157,7 @@ class SubtractWarehouseStocksPipe extends AbstractReturnImportOrderPipe
             $take = min($remainingQty, (int)$stock->stock_quantity);
             
             // Deduct
-            $this->subtractVariantWarehouseStock($variantId, $stock->warehouse_id, $take, $returnCode);
+            $this->subtractVariantWarehouseStock($order, $variantId, $stock->warehouse_id, $take, $returnCode);
             
             $remainingQty -= $take;
         }
@@ -167,7 +167,7 @@ class SubtractWarehouseStocksPipe extends AbstractReturnImportOrderPipe
         }
     }
     
-    protected function subtractProductWarehouseStock(int $productId, int $warehouseId, int $quantity, string $returnCode): void
+    protected function subtractProductWarehouseStock($order, int $productId, int $warehouseId, int $quantity, string $returnCode): void
     {
         $warehouseStockRepo = $this->getWarehouseStockRepo();
         $warehouseStockLogRepo = $this->getWarehouseStockLogRepo();
@@ -209,6 +209,8 @@ class SubtractWarehouseStocksPipe extends AbstractReturnImportOrderPipe
             'reason' => "Trả hàng NCC từ đơn #{$returnCode}",
             'transaction_type' => 'return',
             'user_id' => Auth::id(),
+            'reference_id' => $order->id,
+            'reference_type' => get_class($order),
         ]);
         
         Log::info('SubtractWarehouseStocksPipe - Product stock subtracted', [
@@ -220,7 +222,7 @@ class SubtractWarehouseStocksPipe extends AbstractReturnImportOrderPipe
         ]);
     }
     
-    protected function subtractVariantWarehouseStock(int $variantId, int $warehouseId, int $quantity, string $returnCode): void
+    protected function subtractVariantWarehouseStock($order, int $variantId, int $warehouseId, int $quantity, string $returnCode): void
     {
         $variantWarehouseStockRepo = $this->getVariantWarehouseStockRepo();
         $variantWarehouseStockLogRepo = $this->getVariantWarehouseStockLogRepo();
@@ -262,6 +264,8 @@ class SubtractWarehouseStocksPipe extends AbstractReturnImportOrderPipe
             'reason' => "Trả hàng NCC từ đơn #{$returnCode}",
             'transaction_type' => 'return',
             'user_id' => Auth::id(),
+            'reference_id' => $order->id,
+            'reference_type' => get_class($order),
         ]);
         
         Log::info('SubtractWarehouseStocksPipe - Variant stock subtracted', [

@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Session;
 use App\Services\Interfaces\Product\ProductServiceInterface;
 use App\Services\Impl\V1\Promotion\PromotionPricingService;
 use Exception;
+use Illuminate\Support\Facades\Auth;
+use App\Models\CustomerCart;
 
 class CartService implements CartServiceInterface
 {
@@ -25,13 +27,24 @@ class CartService implements CartServiceInterface
 
     public function get(): array
     {
-        return Session::get($this->sessionKey, [
+        $cart = Session::get($this->sessionKey);
+
+        // Nếu Session trống và người dùng đã đăng nhập, thử load từ Database
+        if (empty($cart) && Auth::guard('customer')->check()) {
+            $dbCart = CustomerCart::where('customer_id', Auth::guard('customer')->id())->first();
+            if ($dbCart && !empty($dbCart->cart_data)) {
+                $cart = $dbCart->cart_data;
+                Session::put($this->sessionKey, $cart);
+            }
+        }
+
+        return $cart ?: [
             'items' => [],
             'subtotal' => 0,
             'total_quantity' => 0,
             'total_price' => 0,
             'eligible_rewards' => []
-        ]);
+        ];
     }
 
     public function count(): int
@@ -396,13 +409,13 @@ class CartService implements CartServiceInterface
         
         // Logical math for summary: Only subtract discounts that apply to the items in "Tạm tính"
         // (Gifts are already 0đ and shown in their own green box, so we don't subtract their "value" again here)
-        $cart['discount_total'] = $totalProdDisc + $orderDisc + $vDist;
+        $cart['discount_total'] = $totalProdDisc + $bxgyDisc + $orderDisc + $vDist;
         $cart['final_total'] = max(0, $totalRetail - $cart['discount_total']);
         
         $cart['summary'] = [
             'total_retail' => $totalRetail,
             'total_product_discount' => $totalProdDisc,
-            'buy_x_get_y_discount' => $bxgyDisc, // We still keep the value for data/reference
+            'buy_x_get_y_discount' => $bxgyDisc, 
             'order_discount' => $orderDisc,
             'voucher_discount' => $vDist,
             'discount_total' => $cart['discount_total'],
@@ -412,6 +425,11 @@ class CartService implements CartServiceInterface
                     'label' => 'Giảm giá sản phẩm',
                     'amount' => $totalProdDisc,
                     'type' => 'product'
+                ],
+                [
+                    'label' => 'Chiết khấu ưu đãi/tặng',
+                    'amount' => $bxgyDisc,
+                    'type' => 'promotion'
                 ],
                 [
                     'label' => 'Chiết khấu đơn hàng',
@@ -444,6 +462,14 @@ class CartService implements CartServiceInterface
         }
 
         Session::put($this->sessionKey, $cart);
+
+        // ✅ ĐỒNG BỘ VÀO DATABASE NẾU ĐÃ ĐĂNG NHẬP
+        if (Auth::guard('customer')->check()) {
+            CustomerCart::updateOrCreate(
+                ['customer_id' => Auth::guard('customer')->id()],
+                ['cart_data' => $cart]
+            );
+        }
         } finally {
             $this->isSaving = false;
         }
@@ -732,5 +758,41 @@ class CartService implements CartServiceInterface
             if ($it['product_id'] == $pid && ($it['variant_id'] ?? '0') == ($vid ?: '0')) $count += $it['quantity'];
         }
         return $count;
+    }
+
+    /**
+     * Gộp giỏ hàng từ Session vào Database sau khi đăng nhập.
+     */
+    public function mergeGuestCartToDatabase(): void
+    {
+        if (!Auth::guard('customer')->check()) return;
+
+        $customerId = Auth::guard('customer')->id();
+        $sessionCart = Session::get($this->sessionKey, ['items' => []]);
+        
+        if (empty($sessionCart['items'])) {
+             // Nếu session trống, chỉ cần load từ DB vào session (đã xử lý trong get() nhưng gọi save() để chắc chắn)
+             $this->get();
+             return;
+        }
+
+        $dbCartRecord = CustomerCart::where('customer_id', $customerId)->first();
+        $dbCart = $dbCartRecord ? $dbCartRecord->cart_data : ['items' => []];
+
+        // Gộp items: Ưu tiên cộng dồn số lượng
+        foreach ($sessionCart['items'] as $rowId => $item) {
+            if (isset($dbCart['items'][$rowId])) {
+                $dbCart['items'][$rowId]['quantity'] += $item['quantity'];
+                $dbCart['items'][$rowId]['updated_at'] = now();
+            } else {
+                $dbCart['items'][$rowId] = $item;
+            }
+        }
+
+        // Tính toán lại toàn bộ khuyến mãi và tổng tiền sau khi gộp
+        $this->save($dbCart);
+        
+        // Cập nhật lại session
+        Session::put($this->sessionKey, $dbCart);
     }
 }

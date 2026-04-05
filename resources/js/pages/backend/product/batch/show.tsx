@@ -463,11 +463,7 @@ export default function BatchShow({
         params.page = logs.current_page
       }
       
-      router.reload({
-        preserveState: false,
-        preserveScroll: false,
-        data: params,
-      })
+      router.reload({ data: params })
     } finally {
       setSavingStock(false)
     }
@@ -525,10 +521,7 @@ export default function BatchShow({
       if (data.success) {
         setOpenTransfer(false)
         // Reload page to refresh batch data and logs
-        router.reload({
-          preserveState: false,
-          preserveScroll: false,
-        })
+        router.reload()
       } else {
         alert(data.message || "Có lỗi xảy ra khi chuyển kho.")
       }
@@ -853,10 +846,10 @@ export default function BatchShow({
                 <div className="grid grid-cols-12 gap-3 text-xs font-medium bg-muted/50 px-[20px] py-3 border-b">
                   <div className="col-span-2">Thời gian</div>
                   <div className="col-span-2">Giao dịch</div>
-                  <div className="col-span-2">Hành động</div>
-                  <div className="col-span-2 text-right">Số lượng</div>
-                  <div className="col-span-2">Thay đổi bởi</div>
-                  <div className="col-span-2 text-right">Tồn kho</div>
+                  <div className="col-span-2 text-right">Số trước</div>
+                  <div className="col-span-2 text-right">Thay đổi</div>
+                  <div className="col-span-2 text-right">Số sau</div>
+                  <div className="col-span-2 text-right">Người thực hiện</div>
                 </div>
 
                 {logs.data.length === 0 ? (
@@ -882,8 +875,8 @@ export default function BatchShow({
                     return (
                       <div key={l.id} className="grid grid-cols-12 gap-3 items-center px-[20px] py-3 border-b last:border-b-0">
                         <div className="col-span-2 text-sm">{l.created_at || "-"}</div>
-                        <div className="col-span-2 text-sm text-muted-foreground">Loại: {transactionTypeLabel}</div>
-                        <div className="col-span-2 text-sm">Điều chỉnh tồn kho</div>
+                        <div className="col-span-2 text-sm text-muted-foreground">{transactionTypeLabel}</div>
+                        <div className="col-span-2 text-right text-sm text-muted-foreground">{l.before_stock}</div>
                         <div className="col-span-2 text-right text-sm">
                           <div className="inline-flex items-center gap-1 justify-end">
                             {up && <ArrowUp className="h-4 w-4 text-emerald-600" />}
@@ -893,15 +886,12 @@ export default function BatchShow({
                             </span>
                           </div>
                         </div>
-                        <div className="col-span-2 text-sm text-muted-foreground">{l.user?.name || "-"}</div>
                         <div className="col-span-2 text-right text-sm">
                           {l.transaction_type === 'transfer' && l.transfer_info ? (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <div className="inline-flex items-center gap-1 justify-end cursor-pointer">
-                                  {up && <ArrowUp className="h-4 w-4 text-emerald-600" />}
-                                  {down && <ArrowDown className="h-4 w-4 text-red-600" />}
-                                  <span className={up ? "text-emerald-700" : down ? "text-red-700" : ""}>
+                                  <span className="text-emerald-700 font-medium">
                                     {l.after_stock}
                                   </span>
                                 </div>
@@ -939,14 +929,13 @@ export default function BatchShow({
                             </Tooltip>
                           ) : (
                             <div className="inline-flex items-center gap-1 justify-end">
-                              {up && <ArrowUp className="h-4 w-4 text-emerald-600" />}
-                              {down && <ArrowDown className="h-4 w-4 text-red-600" />}
-                              <span className={up ? "text-emerald-700" : down ? "text-red-700" : ""}>
+                              <span className="text-emerald-700 font-medium">
                                 {l.after_stock}
                               </span>
                             </div>
                           )}
                         </div>
+                        <div className="col-span-2 text-right text-sm text-muted-foreground">{l.user?.name || "-"}</div>
                       </div>
                     )
                   })

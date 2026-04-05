@@ -13,4 +13,5 @@ interface CartServiceInterface
     public function clear(): void;
     public function recalculate(): void;
     public function applyVoucher(string $code): array;
+    public function mergeGuestCartToDatabase(): void;
 }

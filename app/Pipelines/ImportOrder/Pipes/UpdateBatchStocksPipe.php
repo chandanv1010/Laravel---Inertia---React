@@ -144,6 +144,7 @@ class UpdateBatchStocksPipe extends AbstractImportOrderPipe
                 ]);
                 
                 $this->updateBatchWarehouseStock(
+                    $payload->order,
                     $batchId, 
                     $payload->warehouseId, 
                     $quantity, 
@@ -183,6 +184,7 @@ class UpdateBatchStocksPipe extends AbstractImportOrderPipe
     }
     
     protected function updateBatchWarehouseStock(
+        $order,
         int $batchId, 
         int $warehouseId, 
         int $quantity, 
@@ -254,6 +256,8 @@ class UpdateBatchStocksPipe extends AbstractImportOrderPipe
             'reason' => "Nhập hàng lô {$batchCode} từ đơn nhập #{$orderCode}",
             'transaction_type' => 'import',
             'user_id' => Auth::id(),
+            'reference_id' => $order->id,
+            'reference_type' => get_class($order),
         ]);
         
         Log::info("UpdateBatchStocksPipe - Batch stock updated successfully", [

@@ -18,6 +18,8 @@ class ProductVariantWarehouseStockLog extends Model
         'reason',
         'transaction_type',
         'user_id',
+        'reference_id',
+        'reference_type',
     ];
 
     protected $casts = [
@@ -35,5 +37,15 @@ class ProductVariantWarehouseStockLog extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id', 'id');
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function reference(): \Illuminate\Database\Eloquent\Relations\MorphTo
+    {
+        return $this->morphTo();
     }
 }

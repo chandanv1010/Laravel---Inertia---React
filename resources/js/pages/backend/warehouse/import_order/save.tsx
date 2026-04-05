@@ -81,7 +81,7 @@ export interface ImportOrder extends IDateTime {
     id: number,
     code: string | null,
     supplier_id: number | null,
-    supplier?: { id: number, name: string } | null,
+    supplier?: { id: number, name: string, email?: string | null, phone?: string | null, address?: string | null } | null,
     warehouse_id: number | null,
     warehouse?: { id: number, name: string } | null,
     responsible_user_id: number | null,
@@ -113,7 +113,7 @@ interface ImportOrderSaveProps {
 }
 
 export default function ImportOrderSave({ record, users, suppliers = [], warehouses = [], catalogues = [] }: ImportOrderSaveProps) {
-    const { flash } = usePage().props as any;
+    const { flash, errors } = usePage().props as any;
     const buttonAction = useRef("")
     const isEdit = !!record
 
@@ -913,25 +913,28 @@ export default function ImportOrderSave({ record, users, suppliers = [], warehou
                                                     }
                                                 </span>
                                             </div>
-                                            <div
-                                                className={`flex justify-between items-center py-2 ${items.length > 0
-                                                        ? 'cursor-pointer hover:bg-blue-50 text-blue-600'
-                                                        : 'cursor-not-allowed opacity-50'
-                                                    }`}
-                                                onClick={() => {
-                                                    if (items.length > 0) {
-                                                        setShowImportCostModal(true);
-                                                    }
-                                                }}
-                                            >
-                                                <span className="text-sm font-medium">Chi phí nhập hàng (F7)</span>
-                                                <span className="text-sm text-right">
-                                                    {totalImportCost > 0
-                                                        ? totalImportCost.toLocaleString('vi-VN') + '₫'
-                                                        : '--- 0₫'
-                                                    }
-                                                </span>
-                                            </div>
+                                                <div
+                                                    className={`flex flex-col py-2 ${items.length > 0
+                                                            ? 'cursor-pointer hover:bg-blue-50 text-blue-600'
+                                                            : 'cursor-not-allowed opacity-50'
+                                                        }`}
+                                                    onClick={() => {
+                                                        if (items.length > 0) {
+                                                            setShowImportCostModal(true);
+                                                        }
+                                                    }}
+                                                >
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-sm font-medium">Chi phí nhập hàng (F7)</span>
+                                                        <span className="text-sm text-right">
+                                                            {totalImportCost > 0
+                                                                ? totalImportCost.toLocaleString('vi-VN') + '₫'
+                                                                : '--- 0₫'
+                                                            }
+                                                        </span>
+                                                    </div>
+                                                    <InputError message={errors?.import_costs} className="text-right" />
+                                                </div>
                                             <div className="flex justify-between items-center py-2">
                                                 <span className="text-sm font-semibold">Tiền cần trả NCC</span>
                                                 <span className="text-sm text-right font-semibold text-blue-600">
@@ -1090,7 +1093,7 @@ export default function ImportOrderSave({ record, users, suppliers = [], warehou
                                                     discount: discount,
                                                     discount_type: discountType,
                                                     import_cost: totalImportCost,
-                                                    import_costs: importCosts,
+                                                    import_costs: importCosts as any,
                                                     amount_to_pay: amountToPay,
                                                     items: items.map(item => ({
                                                         product_id: item.product_id,
@@ -1101,7 +1104,7 @@ export default function ImportOrderSave({ record, users, suppliers = [], warehou
                                                         discount_type: item.discount_type || 'amount',
                                                         total_price: item.total_price,
                                                         notes: item.notes,
-                                                        batch_allocations: item.batch_allocations || null,
+                                                        batch_allocations: (item.batch_allocations || null) as any,
                                                     })),
                                                     ...(isEdit ? { _method: 'put' } : {}),
                                                     save_and_redirect: buttonAction.current,
@@ -1114,22 +1117,34 @@ export default function ImportOrderSave({ record, users, suppliers = [], warehou
                                                 })}
                                                 className="flex-1"
                                             >
-                                                {({ processing }) => (
-                                                    <Button
-                                                        type="submit"
-                                                        disabled={processing}
-                                                        onClick={() => buttonAction.current = 'save_and_redirect'}
-                                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        {processing ? (
-                                                            <>
-                                                                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                                                                Đang lưu...
-                                                            </>
-                                                        ) : (
-                                                            isEdit ? 'Cập nhật đơn nhập hàng' : 'Tạo đơn nhập hàng'
+                                                {({ processing, errors: formErrors }) => (
+                                                    <div className="flex flex-col gap-2 w-full">
+                                                        {Object.keys(formErrors).length > 0 && !formErrors.import_costs && !formErrors.supplier_id && (
+                                                            <div className="p-3 bg-red-50 border border-red-200 rounded-md mb-2">
+                                                                <p className="text-xs text-red-600 font-medium mb-1">Vui lòng kiểm tra lại các lỗi sau:</p>
+                                                                <ul className="list-disc list-inside space-y-0.5">
+                                                                    {Object.entries(formErrors).map(([key, value]) => (
+                                                                        <li key={key} className="text-[11px] text-red-500">{value}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
                                                         )}
-                                                    </Button>
+                                                        <Button
+                                                            type="submit"
+                                                            disabled={processing}
+                                                            onClick={() => buttonAction.current = 'save_and_redirect'}
+                                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            {processing ? (
+                                                                <>
+                                                                    <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                                                                    Đang lưu...
+                                                                </>
+                                                            ) : (
+                                                                isEdit ? 'Cập nhật đơn nhập hàng' : 'Tạo đơn nhập hàng'
+                                                            )}
+                                                        </Button>
+                                                    </div>
                                                 )}
                                             </Form>
                                             <Link href="/backend/import-order" className="flex-1">
@@ -1147,7 +1162,7 @@ export default function ImportOrderSave({ record, users, suppliers = [], warehou
                                     <div className="space-y-4">
                                         <div className="space-y-2">
                                             <Label className="font-bold mb-2 block">Nhà cung cấp</Label>
-                                            <div className={supplierError ? 'border border-red-500 rounded-md' : ''}>
+                                            <div className={supplierError || errors?.supplier_id ? 'border border-red-500 rounded-md' : ''}>
                                                 <Combobox
                                                     options={supplierOptions}
                                                     value={supplierId}
@@ -1162,8 +1177,8 @@ export default function ImportOrderSave({ record, users, suppliers = [], warehou
                                                     className="w-full"
                                                 />
                                             </div>
-                                            {supplierError && (
-                                                <InputError message={supplierError} className="text-[13px]" />
+                                            {(supplierError || errors?.supplier_id) && (
+                                                <InputError message={supplierError || errors?.supplier_id} className="text-[13px]" />
                                             )}
                                         </div>
                                     </div>
@@ -1211,7 +1226,7 @@ export default function ImportOrderSave({ record, users, suppliers = [], warehou
                                                 <PopoverTrigger asChild>
                                                     <Button
                                                         variant="outline"
-                                                        className="w-full justify-start text-left font-normal text-[14px]"
+                                                        className={`w-full justify-start text-left font-normal text-[14px] ${errors?.expected_import_date ? 'border-red-500 text-red-500' : ''}`}
                                                     >
                                                         <CalendarIcon className="mr-2 h-4 w-4" />
                                                         {expectedImportDate ? format(expectedImportDate, 'dd/MM/yyyy') : "Chọn ngày nhập dự kiến"}
@@ -1226,6 +1241,7 @@ export default function ImportOrderSave({ record, users, suppliers = [], warehou
                                                     />
                                                 </PopoverContent>
                                             </Popover>
+                                            <InputError message={errors?.expected_import_date} />
                                         </div>
 
                                         <div className="space-y-2">
@@ -1239,7 +1255,7 @@ export default function ImportOrderSave({ record, users, suppliers = [], warehou
                                                         setCode(upperValue);
                                                     }}
                                                     placeholder="Nhập mã đơn"
-                                                    className="uppercase"
+                                                    className={`uppercase ${errors?.code ? 'border-red-500' : ''}`}
                                                 />
                                                 <Button
                                                     type="button"
