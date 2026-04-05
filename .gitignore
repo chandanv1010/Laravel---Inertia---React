@@ -31,3 +31,5 @@ yarn-error.log
 /playwright/.auth
 /test-results
 /playwright-report
+/backup_db
+/tmp/
