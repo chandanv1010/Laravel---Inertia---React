@@ -13,7 +13,7 @@ interface CartSidebarProps {
 }
 
 export default function CartSidebar({ promoProducts = [], onCheckout, isProcessing }: CartSidebarProps) {
-    const { cart, cartItems, cartTotal, discountTotal, finalTotal, removeFromCart, addToCart, clearCart } = useCart();
+    const { cart, cartItems, itemsSubtotal, additionalDiscount, finalTotal, removeFromCart, addToCart, clearCart } = useCart();
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
 
     const groupedCartItems = React.useMemo(() => {
@@ -277,19 +277,19 @@ export default function CartSidebar({ promoProducts = [], onCheckout, isProcessi
                 <div className="border-t border-dashed pt-4 space-y-3">
                     <div className="flex justify-between text-sm text-gray-600">
                         <span>Tạm tính</span>
-                        <span>{formatPrice(cartTotal || 0)}</span>
+                        <span>{formatPrice(itemsSubtotal || 0)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-gray-600">
                         <span>Phí giao hàng</span>
                         <span>Miễn phí</span>
                     </div>
-                    {discountTotal > 0 && (
+                    {additionalDiscount > 0 && (
                         <>
                             <div className="flex justify-between text-sm text-gray-600">
                                 <span className="flex items-center gap-1">
-                                    Giảm giá
+                                    Giảm giá thêm
                                 </span>
-                                <span className="text-red-600">-{formatPrice(discountTotal)}</span>
+                                <span className="text-red-600">-{formatPrice(additionalDiscount)}</span>
                             </div>
 
                             {/* Detailed Breakdown */}
@@ -308,7 +308,7 @@ export default function CartSidebar({ promoProducts = [], onCheckout, isProcessi
                     <div className="border-t border-gray-100 pt-3 flex justify-between items-end">
                         <span className="font-bold text-gray-900 text-lg">Thành tiền</span>
                         <span className="font-bold text-2xl text-blue-600">
-                            {formatPrice(finalTotal !== undefined ? finalTotal : cartTotal)}
+                            {formatPrice(finalTotal !== undefined ? finalTotal : itemsSubtotal)}
                         </span>
                     </div>
                 </div>

@@ -55,7 +55,7 @@ class CheckoutService implements CheckoutServiceInterface
      */
     public function getOrderByCode(string $code)
     {
-        return Order::with(['orderItems', 'paymentMethod'])->where('order_code', $code)->first();
+        return Order::with(['orderItems.product', 'orderItems.variant', 'paymentMethod'])->where('order_code', $code)->first();
     }
 
     /**
@@ -66,6 +66,9 @@ class CheckoutService implements CheckoutServiceInterface
      */
     public function processOrder(Request $request): array
     {
+        // Force recalculate to ensure session totals are fresh from DB/Rules
+        $this->cartService->recalculate();
+        
         $cart = $this->cartService->get();
         if (empty($cart['items'])) {
             throw new \Exception('Giỏ hàng trống');
@@ -73,6 +76,8 @@ class CheckoutService implements CheckoutServiceInterface
 
         $customer = Auth::guard('customer')->user();
         
+        \Illuminate\Support\Facades\Log::info('[CHECKOUT] Final Total in Session before Pipe: ' . ($cart['final_total'] ?? 'MISSING'));
+
         // 1. Initialize Pipeline Payload
         $payload = new CheckoutPayload();
         $payload->setData($cart, $customer, $request);

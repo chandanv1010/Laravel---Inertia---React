@@ -31,6 +31,8 @@ interface CartContextType {
     applyVoucher: (code: string) => Promise<any>;
     isLoading: boolean;
     discountTotal: number;
+    itemsSubtotal: number;
+    additionalDiscount: number;
     finalTotal: number;
     voucherCode?: string;
     cart: any; // Raw cart data including eligible_rewards
@@ -42,6 +44,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
     const [cartCount, setCartCount] = useState(0);
     const [cartTotal, setCartTotal] = useState(0);
+    const [itemsSubtotal, setItemsSubtotal] = useState(0);
+    const [additionalDiscount, setAdditionalDiscount] = useState(0);
     const [discountTotal, setDiscountTotal] = useState(0);
     const [finalTotal, setFinalTotal] = useState(0);
     const [voucherCode, setVoucherCode] = useState<string | undefined>(undefined);
@@ -55,7 +59,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 const data = response.data.data;
                 setCartItems(Object.values(data.items));
                 setCartCount(data.total_quantity);
-                setCartTotal(data.total_price); // Subtotal
+                setCartTotal(data.total_price);
+                setItemsSubtotal(data.summary?.items_subtotal || data.total_price);
+                setAdditionalDiscount(data.summary?.additional_discount || 0);
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
                 setVoucherCode(data.voucher_code);
@@ -85,6 +91,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 setCartItems(Object.values(data.items));
                 setCartCount(data.total_quantity);
                 setCartTotal(data.total_price);
+                setItemsSubtotal(data.summary?.items_subtotal || data.total_price);
+                setAdditionalDiscount(data.summary?.additional_discount || 0);
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
                 setVoucherCode(data.voucher_code);
@@ -113,6 +121,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 setCartItems(Object.values(data.items));
                 setCartCount(data.total_quantity);
                 setCartTotal(data.total_price);
+                setItemsSubtotal(data.summary?.items_subtotal || data.total_price);
+                setAdditionalDiscount(data.summary?.additional_discount || 0);
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
                 setVoucherCode(data.voucher_code);
@@ -136,6 +146,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 setCartItems(Object.values(data.items));
                 setCartCount(data.total_quantity);
                 setCartTotal(data.total_price);
+                setItemsSubtotal(data.summary?.items_subtotal || data.total_price);
+                setAdditionalDiscount(data.summary?.additional_discount || 0);
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
                 setVoucherCode(data.voucher_code);
@@ -157,6 +169,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 setCartItems(Object.values(data.items));
                 setCartCount(data.total_quantity);
                 setCartTotal(data.total_price);
+                setItemsSubtotal(data.summary?.items_subtotal || data.total_price);
+                setAdditionalDiscount(data.summary?.additional_discount || 0);
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
                 setVoucherCode(data.voucher_code);
@@ -197,6 +211,8 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
                 setCartItems(Object.values(data.items));
                 setCartCount(data.total_quantity);
                 setCartTotal(data.total_price);
+                setItemsSubtotal(data.summary?.items_subtotal || data.total_price);
+                setAdditionalDiscount(data.summary?.additional_discount || 0);
                 setDiscountTotal(data.discount_total || 0);
                 setFinalTotal(data.final_total || data.total_price);
                 setVoucherCode(data.voucher_code);
@@ -213,7 +229,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
     return (
         <CartContext.Provider value={{
-            cartItems, cartCount, cartTotal, discountTotal, finalTotal, voucherCode, cart,
+            cartItems, cartCount, cartTotal, itemsSubtotal, additionalDiscount, discountTotal, finalTotal, voucherCode, cart,
             addToCart, addCombo, removeFromCart, updateQuantity, clearCart, refreshCart, applyVoucher, isLoading
         }}>
             {children}

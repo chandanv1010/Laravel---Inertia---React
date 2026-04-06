@@ -46,6 +46,7 @@ require __DIR__.'/route/promotion.php';
 require __DIR__.'/route/voucher.php';
 require __DIR__.'/route/cash_book.php';
 require __DIR__.'/route/menu.php';
+require __DIR__.'/route/order.php';
 require __DIR__.'/route/banner.php';
 require __DIR__.'/route/review.php';
 require __DIR__.'/route/widget.php';

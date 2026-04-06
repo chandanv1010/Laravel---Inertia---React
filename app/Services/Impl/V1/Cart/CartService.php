@@ -56,6 +56,10 @@ class CartService implements CartServiceInterface
     public function clear(): void
     {
         Session::forget($this->sessionKey);
+
+        if (Auth::guard('customer')->check()) {
+            CustomerCart::where('customer_id', Auth::guard('customer')->id())->delete();
+        }
     }
 
     public function recalculate(): void
@@ -87,7 +91,7 @@ class CartService implements CartServiceInterface
         $groupId = "cb_{$comboId}"; // Deterministic group for this combo type
         
         $items = $combo->combo_items;
-        $totalItems = count($items);
+        $totalItems = $items->count();
         $comboPrice = (float)$combo->combo_price;
         
         foreach ($items as $index => $item) {
@@ -253,12 +257,25 @@ class CartService implements CartServiceInterface
     public function applyVoucher(string $code): array
     {
         $cart = $this->get();
-        $voucherService = app(\App\Services\Impl\V1\Voucher\VoucherService::class);
-        $voucher = $voucherService->validateVoucher($code, $cart['items'], $cart['total_price']);
         $cart['voucher_code'] = $code;
-        $cart['voucher_info'] = ['id' => $voucher->id, 'code' => $voucher->code, 'type' => $voucher->type, 'discount_value' => (float)$voucher->discount_value, 'discount_type' => $voucher->discount_type, 'max_discount_value' => (float)$voucher->max_discount_value];
+        
+        // Thực hiện lưu và tính toán lại toàn bộ giỏ hàng
         $this->save($cart);
-        return $this->get();
+        
+        // Lấy lại dữ liệu giỏ hàng sau khi đã tính toán
+        $updatedCart = $this->get();
+        
+        // Kiểm tra xem sau khi tính toán, Voucher có thực sự giảm được tiền không
+        $voucherDiscount = $updatedCart['summary']['voucher_discount'] ?? 0;
+        
+        if ($voucherDiscount <= 0) {
+            // Nếu không giảm được đồng nào, xóa voucher và báo lỗi
+            unset($cart['voucher_code'], $cart['voucher_info']);
+            $this->save($cart);
+            throw new \Exception('Mã giảm giá này không mang lại thêm ưu đãi cho các sản phẩm trong giỏ (có thể do sản phẩm đã nhận ưu đãi tối đa).');
+        }
+
+        return $updatedCart;
     }
     protected function save(array &$cart): void
     {
@@ -404,33 +421,28 @@ class CartService implements CartServiceInterface
             $finalPriceCombined += ($it['price'] * $it['quantity']);
         }
 
+        $itemsSubtotal = max(0, $totalRetail - $totalProdDisc - $bxgyDisc);
+        $additionalDiscount = $orderDisc + $vDist;
+
         $cart['total_quantity'] = $finalQty;
-        $cart['total_price'] = $totalRetail; // Show non-gift retail as "Tạm tính" base
+        // Keep total_price as Retail for backward compatibility if needed, 
+        // but items_subtotal will be the one used for the new UI "Tạm tính"
+        $cart['total_price'] = $totalRetail; 
         
-        // Logical math for summary: Only subtract discounts that apply to the items in "Tạm tính"
-        // (Gifts are already 0đ and shown in their own green box, so we don't subtract their "value" again here)
         $cart['discount_total'] = $totalProdDisc + $bxgyDisc + $orderDisc + $vDist;
-        $cart['final_total'] = max(0, $totalRetail - $cart['discount_total']);
+        $cart['final_total'] = max(0, $itemsSubtotal - $additionalDiscount);
         
         $cart['summary'] = [
             'total_retail' => $totalRetail,
+            'items_subtotal' => $itemsSubtotal, // New field for transparent UI
+            'additional_discount' => $additionalDiscount, // New field for transparent UI
             'total_product_discount' => $totalProdDisc,
             'buy_x_get_y_discount' => $bxgyDisc, 
             'order_discount' => $orderDisc,
             'voucher_discount' => $vDist,
             'discount_total' => $cart['discount_total'],
             'final_total' => $cart['final_total'],
-            'discount_breakdown' => [
-                [
-                    'label' => 'Giảm giá sản phẩm',
-                    'amount' => $totalProdDisc,
-                    'type' => 'product'
-                ],
-                [
-                    'label' => 'Chiết khấu ưu đãi/tặng',
-                    'amount' => $bxgyDisc,
-                    'type' => 'promotion'
-                ],
+            'discount_breakdown' => collect([
                 [
                     'label' => 'Chiết khấu đơn hàng',
                     'amount' => $orderDisc,
@@ -441,7 +453,7 @@ class CartService implements CartServiceInterface
                     'amount' => $vDist,
                     'type' => 'voucher'
                 ]
-            ]
+            ])->filter(fn($item) => $item['amount'] > 0)->values()->toArray()
         ];
         foreach ($cart['items'] as &$it) {
             $it['updated_at'] = microtime(true);

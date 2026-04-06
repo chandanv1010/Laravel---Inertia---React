@@ -42,10 +42,14 @@ class CreateOrderPipe extends AbstractCheckoutPipe
         $summary = $cart['summary'] ?? [];
 
         // 1. Tạo đơn hàng với mã tạm thời qua Repository
+        $totalAmount = $summary['final_total'] ?? ($cart['final_total'] ?? $cart['total_price']);
+        
+        \Illuminate\Support\Facades\Log::info("[CREATE ORDER PIPE] totalAmount: {$totalAmount}, retail: " . ($summary['total_retail'] ?? 'N/A'));
+
         $order = $this->orderRepo->create([
             'order_code' => 'TEMP-' . microtime(true),
             'customer_id' => $customer->id,
-            'total_amount' => $cart['total_price'],
+            'total_amount' => $totalAmount,
             'subtotal' => $summary['total_retail'] ?? $cart['total_price'],
             'discount_total' => $summary['discount_total'] ?? 0,
             'voucher_discount' => $summary['voucher_discount'] ?? 0,

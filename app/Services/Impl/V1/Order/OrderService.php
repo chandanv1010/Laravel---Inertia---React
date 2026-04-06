@@ -49,4 +49,12 @@ class OrderService extends BaseService implements OrderServiceInterface {
     {
         return $this->repository->getModel()->with(['orderItems', 'paymentMethod'])->where('order_code', $code)->first();
     }
+
+    /**
+     * Override show to include relations for Admin
+     */
+    public function show($id, $relations = ['orderItems', 'paymentMethod'])
+    {
+        return $this->repository->findById($id, ['*'], $relations);
+    }
 }

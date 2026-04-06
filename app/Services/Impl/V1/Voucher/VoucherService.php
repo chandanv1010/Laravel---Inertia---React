@@ -741,6 +741,8 @@ class VoucherService extends BaseCacheService implements VoucherServiceInterface
                  $matched = true;
              } elseif ($voucher->apply_source === 'product_variant') {
                 foreach ($cartItems as $item) {
+                    if (!empty($item['is_gift'])) continue;
+                    
                      $exists = DB::table('voucher_product_variant')
                         ->where('voucher_id', $voucher->id)
                         ->where(function($q) use ($item) {
@@ -755,6 +757,8 @@ class VoucherService extends BaseCacheService implements VoucherServiceInterface
                 }
              } elseif ($voucher->apply_source === 'product_catalogue') {
                  foreach ($cartItems as $item) {
+                    if (!empty($item['is_gift'])) continue;
+
                     $productCatalogueIds = DB::table('product_catalogue_product')
                         ->where('product_id', $item['product_id'])
                         ->pluck('product_catalogue_id');
