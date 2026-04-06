@@ -113,6 +113,8 @@ use App\Services\Interfaces\Widget\WidgetServiceInterface;
 use App\Services\Impl\V1\Widget\WidgetService;
 use App\Services\Interfaces\Cart\CartServiceInterface;
 use App\Services\Impl\V1\Cart\CartService;
+use App\Services\Interfaces\Inventory\InventoryServiceInterface;
+use App\Services\Impl\V1\Inventory\InventoryService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -200,6 +202,9 @@ class AppServiceProvider extends ServiceProvider
         // Order Module
         $this->app->bind(OrderServiceInterface::class, OrderService::class);
         $this->app->bind(OrderRepo::class);
+
+        // Inventory Module
+        $this->app->bind(InventoryServiceInterface::class, InventoryService::class);
     }
 
     /**
