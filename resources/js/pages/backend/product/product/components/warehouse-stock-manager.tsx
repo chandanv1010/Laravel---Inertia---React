@@ -580,7 +580,7 @@ export function WarehouseStockManager({
                                 </div>
                                 <div className="col-span-2 flex items-center justify-center text-sm">{stock.incoming_quantity || 0}</div>
                                 <div className="col-span-2 flex items-center justify-center text-sm font-medium text-orange-600">{stock.trading_quantity || 0}</div>
-                                <div className="col-span-2 flex items-center justify-center text-sm font-medium text-green-600">{Math.max(0, (stock.stock_quantity ?? 0) - (stock.trading_quantity ?? 0))}</div>
+                                <div className="col-span-2 flex items-center justify-center text-sm font-medium text-green-600">{stock.stock_quantity ?? 0}</div>
                             </div>
                         ) : (
                             <div key={index} className="grid grid-cols-12 gap-3 items-center py-1">

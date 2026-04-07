@@ -403,7 +403,8 @@ class ProductController extends BaseController
                 ->where('product_id', $product->id)
                 ->with('user:id,name,email')
                 ->with('warehouse:id,name,code')
-                ->orderBy('created_at', 'desc');
+                ->orderBy('created_at', 'desc')
+                ->orderBy('id', 'desc');
 
             $transactionTypes = $request->input('transaction_types', []);
             if (is_array($transactionTypes) && count($transactionTypes) > 0) {

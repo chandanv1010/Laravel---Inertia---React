@@ -7,9 +7,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Models\OrderItem;
 
+use App\Traits\HasQuery;
+
 class Order extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, HasQuery;
 
     protected $fillable = [
         'order_code',
@@ -60,5 +62,13 @@ class Order extends Model
     public function orderItems()
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    /**
+     * Relationship names that can be handled automatically by BaseService
+     */
+    public function getRelationable(): array
+    {
+        return []; // No many-to-many relations to sync automatically yet
     }
 }

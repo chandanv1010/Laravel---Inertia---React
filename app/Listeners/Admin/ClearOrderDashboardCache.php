@@ -3,6 +3,7 @@
 namespace App\Listeners\Admin;
 
 use App\Events\Frontend\Checkout\OrderCreated;
+use App\Events\Admin\Order\OrderUpdated;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Cache;
@@ -13,28 +14,16 @@ class ClearOrderDashboardCache implements ShouldQueue
     use InteractsWithQueue;
 
     /**
-     * Create the event listener.
+     * Handle the events.
      */
-    public function __construct()
-    {
-        //
-    }
-
-    /**
-     * Handle the event.
-     * 
-     * Giải pháp: Sử dụng Cache Tags để quản lý toàn bộ cache liên quan đến Order Admin.
-     * Khi có đơn hàng mới, chúng ta flush toàn bộ tag này.
-     */
-    public function handle(OrderCreated $event): void
+    public function handle(OrderCreated|OrderUpdated $event): void
     {
         try {
-            // Xóa toàn bộ cache thuộc bộ thẻ 'orders_admin'
-            // Điều này đảm bảo Dashboard Admin sẽ load lại dữ liệu mới nhất
+            // Xóa toàn bộ cache thuộc bộ thẻ 'orders_admin' và 'orders'
             if (Cache::supportsTags()) {
-                Cache::tags(['orders_admin'])->flush();
+                Cache::tags(['orders_admin', 'orders'])->flush();
             } else {
-                // Fallback nếu driver không hỗ trợ tags (như file driver)
+                // Fallback cho file driver
                 Cache::forget('admin_order_stats');
                 Cache::forget('admin_latest_orders');
             }

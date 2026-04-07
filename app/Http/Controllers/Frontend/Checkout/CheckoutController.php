@@ -133,7 +133,7 @@ class CheckoutController extends Controller
                         'row_id' => 'combo_' . $item->combo_group_id,
                         'name' => 'Combo sản phẩm',
                         'image' => $item->image, // Use the mapped image
-                        'total_price' => 0,
+                        'total' => 0,
                         'quantity' => 1,
                         'is_combo_group' => true,
                         'child_items' => [],
@@ -141,7 +141,7 @@ class CheckoutController extends Controller
                     ];
                 }
                 $combos[$item->combo_group_id]['child_items'][] = $item;
-                $combos[$item->combo_group_id]['total_price'] += $item->total;
+                $combos[$item->combo_group_id]['total'] += (float)$item->total;
                 
                 if ($item->type === 'combo') {
                     $combos[$item->combo_group_id]['name'] = $item->product_name;
@@ -155,7 +155,7 @@ class CheckoutController extends Controller
         // Add combos to the final list and add their totals to itemsSubtotal
         foreach ($combos as $combo) {
             $groupedItems[] = $combo;
-            $itemsSubtotal += $combo['total_price'];
+            $itemsSubtotal += $combo['total'];
         }
 
         // Logic fix for calculation transparency:

@@ -37,6 +37,16 @@ class ProcessOrderItemsPipe extends AbstractCheckoutPipe
             elseif (!empty($item['is_gift']))                                              $type = 'gift';
             elseif (!empty($item['promo_id']) && empty($item['is_combo_item']))            $type = 'reward';
 
+            // Snapshot combo context if applicable
+            $promotionsSnapshot = $item['product_promotions'] ?? [];
+            if ($type === 'combo_item' && !empty($item['combo_group_id'])) {
+                $promotionsSnapshot['combo_snapshot'] = [
+                    'combo_group_id' => $item['combo_group_id'],
+                    'combo_name' => $item['combo_name'] ?? 'Combo',
+                    'combo_image' => $item['combo_image'] ?? null,
+                ];
+            }
+
             $orderItems[] = [
                 'product_id' => $item['product_id'],
                 'variant_id' => $item['variant_id'] ?? null,
@@ -44,11 +54,13 @@ class ProcessOrderItemsPipe extends AbstractCheckoutPipe
                 'combo_group_id' => $item['combo_group_id'] ?? null,
                 'product_name' => $item['name'],
                 'variant_name' => $item['variant_name'] ?? null,
+                'product_image' => $item['image'] ?? ($item['product_image'] ?? null),
+                'variant_image' => $item['variant_image'] ?? null,
                 'quantity' => $item['quantity'],
                 'price' => $item['price'],
                 'original_price' => $item['original_price'] ?? $item['price'],
                 'total' => $item['price'] * $item['quantity'],
-                'promotions_snapshot' => $item['product_promotions'] ?? [],
+                'promotions_snapshot' => $promotionsSnapshot,
             ];
         }
 

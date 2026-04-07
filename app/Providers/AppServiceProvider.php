@@ -220,8 +220,13 @@ class AppServiceProvider extends ServiceProvider
         );
 
         Event::listen(
-            OrderCreated::class,
-            ClearOrderDashboardCache::class,
+            \App\Events\Frontend\Checkout\OrderCreated::class,
+            \App\Listeners\Admin\ClearOrderDashboardCache::class,
+        );
+
+        Event::listen(
+            \App\Events\Admin\Order\OrderUpdated::class,
+            \App\Listeners\Admin\ClearOrderDashboardCache::class,
         );
     }
 }

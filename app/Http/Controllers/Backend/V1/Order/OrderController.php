@@ -53,8 +53,11 @@ class OrderController extends BaseController {
             $record = $this->service->show($id);
         }
         
+        $cashReasons = \App\Models\CashReason::receipt()->get();
+        
         return Inertia::render('backend/order/show', [
-            'record' => $record
+            'record' => $record,
+            'cashReasons' => $cashReasons
         ]);
     }
 
@@ -68,6 +71,6 @@ class OrderController extends BaseController {
     public function update(Request $request, $id): RedirectResponse {
         $this->authorize('modules', 'order:update');
         $response = $this->service->save($request, $id);
-        return redirect()->back()->with('success', 'Cập nhật trạng thái đơn hàng thành công');
+        return redirect()->back();
     }
 }

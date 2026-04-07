@@ -17,6 +17,8 @@ class OrderItem extends Model
         'combo_group_id',
         'product_name',
         'variant_name',
+        'product_image',
+        'variant_image',
         'quantity',
         'price',
         'original_price',

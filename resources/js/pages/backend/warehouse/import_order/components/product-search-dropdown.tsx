@@ -28,16 +28,20 @@ interface Product {
         warehouse_stocks?: Array<{
             warehouse_id: number;
             stock_quantity: number;
+            available_quantity?: number;
             storage_location?: string;
         }>;
         stock_quantity?: number;
+        available_quantity?: number;
     }>;
     warehouse_stocks?: Array<{
         warehouse_id: number;
         stock_quantity: number;
+        available_quantity?: number;
         storage_location?: string;
     }>;
     stock_quantity?: number;
+    available_quantity?: number;
 }
 
 interface ProductSearchDropdownProps {

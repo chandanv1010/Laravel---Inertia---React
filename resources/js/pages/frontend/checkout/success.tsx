@@ -52,8 +52,8 @@ const formatPrice = (price: string | number) => {
 const SuccessItemRow = ({ item }: { item: any }) => {
     const isCombo = !!item.is_combo_group;
     
-    // Total final price for this row
-    const totalFinal = Number(item.total || (Number(item.price) * item.quantity));
+    // Prioritize pre-calculated total (like for combos), otherwise fallback to price * quantity
+    const totalFinal = (item.total !== undefined && item.total !== null) ? Number(item.total) : (Number(item.price || 0) * (item.quantity || 1));
 
     return (
         <div className={`py-4 flex gap-4 ${isCombo ? 'bg-blue-50/10' : ''} transition-colors px-2 rounded-lg border-b border-gray-50 last:border-0`}>

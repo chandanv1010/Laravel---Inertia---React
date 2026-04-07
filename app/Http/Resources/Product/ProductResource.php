@@ -300,10 +300,12 @@ class ProductResource extends JsonResource
                     foreach ($this->batches as $batch) {
                         if ($batch->relationLoaded('warehouseStocks')) {
                             foreach ($batch->warehouseStocks as $batchStock) {
-                                $wid = $batchStock->warehouse_id;
+                                if (!$batchStock) continue;
+                                $wid = (int) $batchStock->warehouse_id;
+                                
                                 if (!isset($warehouseAggregated[$wid])) {
                                     $warehouseAggregated[$wid] = [
-                                        'warehouse_id' => (int) $wid,
+                                        'warehouse_id' => $wid,
                                         'stock_quantity' => 0,
                                         'trading_quantity' => (int) ($tradingData['product'][$this->id][$wid] ?? 0),
                                         'incoming_quantity' => (int) ($incomingData['product'][$this->id][$wid] ?? 0),
@@ -314,6 +316,7 @@ class ProductResource extends JsonResource
                             }
                         }
                     }
+                    
                     return array_values($warehouseAggregated);
                 }
                 
@@ -321,10 +324,12 @@ class ProductResource extends JsonResource
                 return $this->warehouseStocks->map(function ($stock) use ($tradingData, $incomingData) {
                     $pid = (int) $this->id;
                     $wid = (int) $stock->warehouse_id;
+                    $stockQty = (int) ($stock->stock_quantity ?? 0);
                     return [
                         'warehouse_id' => $wid,
-                        'stock_quantity' => (int) ($stock->stock_quantity ?? 0),
+                        'stock_quantity' => $stockQty,
                         'trading_quantity' => (int) ($tradingData['product'][$pid][$wid] ?? 0),
+                        'available_quantity' => $stockQty, // Đảm bảo bằng Tồn kho như yêu cầu
                         'incoming_quantity' => (int) ($incomingData['product'][$pid][$wid] ?? 0),
                         'storage_location' => $stock->storage_location,
                     ];
@@ -433,7 +438,7 @@ class ProductResource extends JsonResource
     private function getTradingQuantityData(): array
     {
         $unpaidOrderIds = \App\Models\Order::where('payment_status', 'unpaid')
-            ->whereNotIn('order_status', ['cancelled'])
+            ->whereNotIn('order_status', ['cancelled', 'completed']) // Loại bỏ cả đơn đã hoàn thành
             ->pluck('id')
             ->map(fn($id) => (string)$id)
             ->toArray();
